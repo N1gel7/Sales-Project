@@ -7,12 +7,23 @@ export default function Invoices(): React.ReactElement {
   const [product, setProduct] = useState('');
   const [price, setPrice] = useState('');
   const [emailTo, setEmailTo] = useState('');
+  const [coords, setCoords] = useState<{lat:number,lng:number}|null>(null);
 
   async function load() {
     const data = await api.listInvoices();
     setItems(data as any[]);
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
+    // Capture location on page load
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => setCoords(null),
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    }
+  }, []);
 
   async function create() {
     if (!client || !product || !price) {
@@ -20,7 +31,7 @@ export default function Invoices(): React.ReactElement {
       return;
     }
     try {
-      await api.createInvoice({ client, product, price: Number(price) });
+      await api.createInvoice({ client, product, price: Number(price), coords });
       setClient(''); setProduct(''); setPrice('');
       await load();
       alert('Invoice created successfully!');
@@ -45,6 +56,11 @@ export default function Invoices(): React.ReactElement {
           <input value={price} onChange={(e)=>setPrice(e.target.value)} type="number" step="0.01" className="h-10 border border-gray-200 rounded-md px-3 text-sm" placeholder="Price (GHS)" required />
           <button onClick={create} className="h-10 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm px-3">Create Invoice</button>
         </div>
+        {coords && (
+          <div className="card-body pt-0">
+            <div className="text-xs text-green-600">📍 Location captured: {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</div>
+          </div>
+        )}
       </div>
 
       <div className="card">
@@ -60,7 +76,10 @@ export default function Invoices(): React.ReactElement {
               <li key={inv._id} className="py-3 flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium">{inv.client}</div>
-                  <div className="text-xs text-gray-500">{inv.product} • GHS {inv.price}</div>
+                  <div className="text-xs text-gray-500">
+                    {inv.product} • GHS {inv.price}
+                    {inv.location?.lat && inv.location?.lng ? ` • 📍 (${inv.location.lat.toFixed(4)}, ${inv.location.lng.toFixed(4)})` : null}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="text-xs text-gray-500">{new Date(inv.createdAt).toLocaleString()}</div>

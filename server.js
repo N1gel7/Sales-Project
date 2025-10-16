@@ -11,6 +11,7 @@ import Task from './models/Task.js';
 import Invoice from './models/Invoice.js';
 import User from './models/User.js';
 import Category from './models/Category.js';
+import Upload from './models/Upload.js';
 
 const app = express();
 app.use(cors());
@@ -63,7 +64,7 @@ app.post('/api/auth', async (req, res) => {
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ uid: user._id, role: user.role, code: user.code }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ uid: user._id, role: user.role, code: user.code, email: user.email }, process.env.JWT_SECRET, { expiresIn: '7d' });
     return res.status(200).json({ 
       token, 
       user: { 
@@ -134,11 +135,11 @@ app.get('/api/invoices', requireAuth, async (_req, res) => {
 
 app.post('/api/invoices', requireAuth, async (req, res) => {
   try {
-    const { client, product, price } = req.body;
+    const { client, product, price, coords } = req.body;
     if (!client || !product || !price) {
       return res.status(400).json({ error: 'Client, product, and price are required' });
     }
-    const inv = await Invoice.create({ client, product, price: Number(price) });
+    const inv = await Invoice.create({ client, product, price: Number(price), location: coords });
     res.status(201).json(inv);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -232,6 +233,25 @@ app.get('/api/seed/invoices', async (_req, res) => {
   ];
   const ops = await Invoice.insertMany(items, { ordered: false });
   res.json({ inserted: ops.length });
+});
+
+// --- Uploads ---
+app.post('/api/uploads', requireAuth, async (req, res) => {
+  try {
+    const { type, note, taskId, mediaUrl, coords } = req.body || {};
+    const doc = await Upload.create({
+      type, note, taskId, mediaUrl, coords,
+      user: { id: req.user.uid, email: req.user.email, code: req.user.code }
+    });
+    res.status(201).json(doc);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get('/api/uploads', requireAuth, async (_req, res) => {
+  const docs = await Upload.find().sort({ createdAt: -1 }).limit(100);
+  res.json(docs);
 });
 
 
