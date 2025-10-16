@@ -1,34 +1,44 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { api } from '../services/api';
 
 export default function Products(): React.ReactElement {
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api.listProducts();
+        setItems(data as any[]);
+      } catch (e: any) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
   return (
     <div className="space-y-4">
       <div className="card">
-        <div className="card-header">Categories</div>
-        <div className="card-body grid grid-cols-1 md:grid-cols-3 gap-3">
-          <select className="h-10 border border-gray-200 rounded-md px-3 text-sm">
-            <option>All Categories</option>
-            <option>Beverages</option>
-            <option>Snacks</option>
-          </select>
-          <input placeholder="Price min" className="h-10 border border-gray-200 rounded-md px-3 text-sm" />
-          <input placeholder="Price max" className="h-10 border border-gray-200 rounded-md px-3 text-sm" />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="card">
-            <div className="card-body">
-              <div className="font-medium">Product #{i + 1}</div>
-              <div className="text-xs text-gray-500">Category • GHS {(i + 1) * 10}</div>
-              <div className="mt-3 flex items-center gap-2">
-                <button className="h-9 px-3 rounded-md border border-gray-200 text-sm">Edit</button>
-                <button className="h-9 px-3 rounded-md bg-blue-600 text-white text-sm">Add</button>
-              </div>
+        <div className="card-header">Products</div>
+        <div className="card-body">
+          {loading && <div className="text-sm text-gray-500">Loading...</div>}
+          {error && <div className="text-sm text-red-600">{error}</div>}
+          {!loading && !error && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {items.map((p) => (
+                <div key={p._id} className="card">
+                  <div className="card-body">
+                    <div className="font-medium">{p.name}</div>
+                    <div className="text-xs text-gray-500">{p.category} • GHS {p.price}</div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-        ))}
+          )}
+        </div>
       </div>
     </div>
   );
