@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 
 type Point = { _id: string; type: 'invoice'|'upload'; lat: number; lng: number; label: string; time: string };
 
@@ -37,23 +39,55 @@ export default function MapView(): React.ReactElement {
     })();
   }, []);
 
-  const mapSrc = useMemo(() => {
-    const markers = points.slice(0, 50).map(p => `${p.lat},${p.lng}`).join('|');
-    // Using Google Static Maps-like format for placeholder; you can switch to Leaflet/Mapbox later
-    // Here we embed OpenStreetMap with markers via www.openstreetmap.org/export/embed, limited customization
-    // Fallback: show a simple list if iframe fails.
-    return `https://maps.google.com/maps?q=${center.lat},${center.lng}&z=13&output=embed`;
-  }, [center, points]);
+  const [typeFilter, setTypeFilter] = useState<'all'|'invoice'|'upload'>('all');
+  const [from, setFrom] = useState<string>('');
+  const [to, setTo] = useState<string>('');
+
+  const filtered = useMemo(() => {
+    const fromTs = from ? new Date(from).getTime() : 0;
+    const toTs = to ? new Date(to).getTime() : Number.MAX_SAFE_INTEGER;
+    return points.filter(p => {
+      if (typeFilter !== 'all' && p.type !== typeFilter) return false;
+      const t = new Date(p.time).getTime();
+      return t >= fromTs && t <= toTs;
+    });
+  }, [points, typeFilter, from, to]);
 
   return (
     <div className="space-y-4">
       <div className="card">
         <div className="card-header">Map</div>
         <div className="card-body space-y-3">
-          <div className="h-96 border rounded-md overflow-hidden">
-            <iframe title="map" src={mapSrc} className="w-full h-full" />
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={typeFilter} onChange={(e)=>setTypeFilter(e.target.value as any)} className="h-9 border border-gray-200 rounded-md px-2 text-sm">
+              <option value="all">All</option>
+              <option value="invoice">Invoices</option>
+              <option value="upload">Uploads</option>
+            </select>
+            <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} className="h-9 border border-gray-200 rounded-md px-2 text-sm" />
+            <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} className="h-9 border border-gray-200 rounded-md px-2 text-sm" />
+            <div className="text-xs text-gray-500">Showing {filtered.length} of {points.length}</div>
           </div>
-          <div className="text-xs text-gray-500">Showing last {points.length} locations. Click items below to recenter.</div>
+          <div className="h-96 border rounded-md overflow-hidden">
+            <MapContainer center={[center.lat, center.lng]} zoom={13} style={{ width: '100%', height: '100%' }}>
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {filtered.map(p => (
+                <Marker key={p._id} position={[p.lat, p.lng]}>
+                  <Popup>
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">{p.type === 'invoice' ? 'Invoice' : 'Upload'}</div>
+                      <div className="text-xs">{p.label}</div>
+                      <GeoLabel lat={p.lat} lng={p.lng} time={p.time} />
+                    </div>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          </div>
+          <div className="text-xs text-gray-500">Interactive map with filters. Use the list below to recenter.</div>
         </div>
       </div>
 
@@ -61,7 +95,7 @@ export default function MapView(): React.ReactElement {
         <div className="card-header">Recent Locations</div>
         <div className="card-body">
           <ul className="divide-y divide-gray-100">
-            {points.map(p => (
+            {filtered.map(p => (
               <li key={p._id} className="py-3 flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium">
