@@ -62,6 +62,10 @@ export default function Uploads(): React.ReactElement {
       const token = localStorage.getItem('auth_token');
       const user = JSON.parse(localStorage.getItem('user_info') || '{}');
       
+      console.log('Uploading file:', selectedFile.name, 'Type:', selectedFile.type);
+      console.log('User:', user);
+      console.log('Token exists:', !!token);
+      
       const res = await fetch('/api/media-upload', {
         method: 'POST',
         headers: { 
@@ -76,6 +80,13 @@ export default function Uploads(): React.ReactElement {
           user
         })
       });
+      
+      console.log('Response status:', res.status);
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Response error:', errorText);
+        throw new Error(`Server error: ${res.status} - ${errorText}`);
+      }
       
       const { uploadUrl, uploadId, publicUrl } = await res.json();
       
