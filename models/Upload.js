@@ -5,6 +5,7 @@ const UploadSchema = new Schema({
   note: String,
   taskId: String,
   mediaUrl: String,
+  transcript: String,
   coords: { lat: Number, lng: Number },
   user: { id: String, email: String, code: String },
 }, { timestamps: true });
