@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+
+/* App base tokens */
+:root {
+  color-scheme: light;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+/* Utilities not in Tailwind by default */
+.card {
+  @apply bg-white border border-gray-200 rounded-xl shadow-sm;
+}
+.card-header {
+  @apply px-4 py-3 border-b border-gray-100 font-medium;
+}
+.card-body {
+  @apply p-4;
+}
+
+
