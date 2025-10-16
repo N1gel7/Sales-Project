@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -132,27 +133,42 @@ app.get('/api/invoices', requireAuth, async (_req, res) => {
 });
 
 app.post('/api/invoices', requireAuth, async (req, res) => {
-  const inv = await Invoice.create(req.body);
-  res.status(201).json(inv);
+  try {
+    const { client, product, price } = req.body;
+    if (!client || !product || !price) {
+      return res.status(400).json({ error: 'Client, product, and price are required' });
+    }
+    const inv = await Invoice.create({ client, product, price: Number(price) });
+    res.status(201).json(inv);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // --- Seed endpoints (idempotent-ish) ---
 app.get('/api/seed/users', async (_req, res) => {
-  const users = [
-    { name: 'Admin One',   email: 'admin@example.com',   password: 'Admin#123',   role: 'admin' },
-    { name: 'Manager One', email: 'manager@example.com', password: 'Manager#123', role: 'manager' },
-    { name: 'Rep One',     email: 'rep1@example.com',    password: 'Rep#123',     role: 'sales' },
-    { name: 'Rep Two',     email: 'rep2@example.com',    password: 'Rep#123',     role: 'sales' }
-  ];
-  const created = [];
-  for (const u of users) {
-    const exists = await User.findOne({ email: u.email });
-    if (exists) continue;
-    const passwordHash = await bcrypt.hash(u.password, 10);
-    const doc = await User.create({ name: u.name, email: u.email, passwordHash, role: u.role });
-    created.push(doc.email);
+  try {
+    const users = [
+      { name: 'Admin One',   email: 'admin@example.com',   password: 'Admin#123',   role: 'admin' },
+      { name: 'Manager One', email: 'manager@example.com', password: 'Manager#123', role: 'manager' },
+      { name: 'Rep One',     email: 'rep1@example.com',    password: 'Rep#123',     role: 'sales' },
+      { name: 'Rep Two',     email: 'rep2@example.com',    password: 'Rep#123',     role: 'sales' }
+    ];
+    const created = [];
+    for (const u of users) {
+      const exists = await User.findOne({ email: u.email });
+      if (exists) {
+        created.push(u.email + ' (exists)');
+        continue;
+      }
+      const passwordHash = await bcrypt.hash(u.password, 10);
+      const doc = await User.create({ name: u.name, email: u.email, passwordHash, role: u.role });
+      created.push(doc.email);
+    }
+    res.json({ inserted: created.length, emails: created });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
-  res.json({ inserted: created.length, emails: created });
 });
 
 app.get('/api/seed/products', async (_req, res) => {
@@ -205,6 +221,16 @@ app.get('/api/seed/categories', async (_req, res) => {
     { name: 'Snacks', fields: [ { key: 'brand', type: 'dropdown', options: ['BrandB','BrandC'] } ] }
   ];
   const ops = await Category.insertMany(items, { ordered: false });
+  res.json({ inserted: ops.length });
+});
+
+app.get('/api/seed/invoices', async (_req, res) => {
+  const items = [
+    { client: 'John Doe', product: 'Orange Juice 500ml', price: 9.99 },
+    { client: 'Jane Smith', product: 'Apple Juice 1L', price: 14.50 },
+    { client: 'Bob Johnson', product: 'Potato Chips', price: 3.50 }
+  ];
+  const ops = await Invoice.insertMany(items, { ordered: false });
   res.json({ inserted: ops.length });
 });
 

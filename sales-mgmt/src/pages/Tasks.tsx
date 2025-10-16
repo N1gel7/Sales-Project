@@ -25,6 +25,11 @@ export default function Tasks(): React.ReactElement {
     await load();
   }
 
+  async function notify(id: string) {
+    await fetch('/api/notify-task', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    alert('Notification sent (stub)');
+  }
+
   return (
     <div className="space-y-4">
       <div className="card">
@@ -48,6 +53,7 @@ export default function Tasks(): React.ReactElement {
                   <div className="text-xs text-gray-500">Assignee: {t.assignee} • Status: {t.status}</div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button onClick={()=>notify(t._id)} className="h-9 rounded-md border border-gray-200 px-3 text-sm">Notify</button>
                   <button onClick={()=>markDone(t._id)} className="h-9 rounded-md bg-green-600 text-white px-3 text-sm">Mark Done</button>
                 </div>
               </li>

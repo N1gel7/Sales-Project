@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Route, Routes, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Package, ClipboardList, Upload, FileText, Map } from 'lucide-react';
+import { LayoutDashboard, Package, ClipboardList, Upload, FileText, Map, ListTree } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
@@ -9,6 +9,8 @@ import Uploads from './pages/Uploads';
 import Billing from './pages/Billing';
 import MapView from './pages/MapView';
 import Login from './pages/Login';
+import Categories from './pages/Categories';
+import Invoices from './pages/Invoices';
 import { decodeJwt } from './services/http';
 
 function useUser() {
@@ -98,9 +100,11 @@ function App(): React.ReactElement {
             <nav className="flex-1 p-4 space-y-1">
               <SideLink to="/" icon={<LayoutDashboard size={18} />} label="Dashboard" />
               <SideLink to="/products" icon={<Package size={18} />} label="Products" />
+              <SideLink to="/categories" icon={<ListTree size={18} />} label="Categories" />
               <SideLink to="/tasks" icon={<ClipboardList size={18} />} label="Tasks" />
               <SideLink to="/uploads" icon={<Upload size={18} />} label="Uploads" />
               <SideLink to="/billing" icon={<FileText size={18} />} label="Billing" />
+              <SideLink to="/invoices" icon={<FileText size={18} />} label="Invoices" />
               <SideLink to="/map" icon={<Map size={18} />} label="Map" />
             </nav>
             <div className="p-4 text-xs text-gray-500">v0.1.0</div>
@@ -123,9 +127,11 @@ function App(): React.ReactElement {
             <Routes>
               <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
               <Route path="/products" element={<RequireAuth roles={["admin","manager"]}><Products /></RequireAuth>} />
+              <Route path="/categories" element={<RequireAuth roles={["admin","manager"]}><Categories /></RequireAuth>} />
               <Route path="/tasks" element={<RequireAuth roles={["sales","manager","admin"]}><Tasks /></RequireAuth>} />
               <Route path="/uploads" element={<RequireAuth roles={["sales","manager","admin"]}><Uploads /></RequireAuth>} />
               <Route path="/billing" element={<RequireAuth roles={["sales","manager","admin"]}><Billing /></RequireAuth>} />
+              <Route path="/invoices" element={<RequireAuth roles={["sales","manager","admin"]}><Invoices /></RequireAuth>} />
               <Route path="/map" element={<RequireAuth><MapView /></RequireAuth>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
