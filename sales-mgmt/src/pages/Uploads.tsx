@@ -9,6 +9,7 @@ export default function Uploads(): React.ReactElement {
   const [note, setNote] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   async function load() {
@@ -45,6 +46,14 @@ export default function Uploads(): React.ReactElement {
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
+      // Check file size (100MB limit)
+      const maxSize = 100 * 1024 * 1024; // 100MB
+      if (file.size > maxSize) {
+        alert(`File too large. Maximum size is 100MB. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        e.target.value = ''; // Clear the input
+        return;
+      }
+      
       setSelectedFile(file);
       captureLocation();
     }
@@ -57,6 +66,7 @@ export default function Uploads(): React.ReactElement {
     }
     
     setUploading(true);
+    setUploadProgress(0);
     try {
       // Get presigned URL from our API
       const token = localStorage.getItem('auth_token');
@@ -90,11 +100,38 @@ export default function Uploads(): React.ReactElement {
       
       const { uploadUrl, uploadId, publicUrl } = await res.json();
       
-      // Upload file directly to R2
-      await fetch(uploadUrl, {
-        method: 'PUT',
-        body: selectedFile,
-        headers: { 'Content-Type': selectedFile.type }
+      // Upload file directly to R2 with progress tracking
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100;
+            setUploadProgress(Math.round(percentComplete));
+            console.log(`Upload progress: ${Math.round(percentComplete)}%`);
+          }
+        });
+        
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(xhr.response);
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
+          }
+        });
+        
+        xhr.addEventListener('error', () => {
+          reject(new Error('Upload failed: Network error'));
+        });
+        
+        xhr.addEventListener('timeout', () => {
+          reject(new Error('Upload failed: Timeout'));
+        });
+        
+        xhr.open('PUT', uploadUrl);
+        xhr.setRequestHeader('Content-Type', selectedFile.type);
+        xhr.timeout = 300000; // 5 minutes timeout
+        xhr.send(selectedFile);
       });
       
       // If it's audio, transcribe it
@@ -170,8 +207,16 @@ export default function Uploads(): React.ReactElement {
               disabled={!selectedFile || uploading}
               className="h-9 px-3 rounded-md bg-green-600 text-white text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {uploading ? 'Uploading...' : 'Upload File'}
+              {uploading ? `Uploading... ${uploadProgress}%` : 'Upload File'}
             </button>
+            {uploading && (
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-600 h-2 rounded-full transition-all duration-300" 
+                  style={{ width: `${uploadProgress}%` }}
+                ></div>
+              </div>
+            )}
           </div>
         </div>
       </div>

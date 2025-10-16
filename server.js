@@ -15,7 +15,14 @@ import Upload from './models/Upload.js';
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100mb' })); // Increase JSON payload limit for large files
+app.use(express.urlencoded({ limit: '100mb', extended: true })); // Add URL-encoded support
+
+// Add timeout configuration for large uploads
+app.use((req, res, next) => {
+  res.setTimeout(300000); // 5 minutes timeout for large file uploads
+  next();
+});
 
 const PORT = process.env.API_PORT || 4000;
 const MONGODB_URI = process.env.MONGODB_URI;
