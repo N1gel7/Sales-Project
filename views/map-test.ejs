@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Test - Sales Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: 400px; width: 100%; background: #f0f0f0; }
+        .test-info { background: #e3f2fd; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    </style>
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6">Map Test Page</h1>
+        
+        <div class="test-info">
+            <h3 class="font-bold text-blue-600">Debug Information:</h3>
+            <p><strong>Current Time:</strong> <span id="currentTime"></span></p>
+            <p><strong>Leaflet Loaded:</strong> <span id="leafletStatus">Checking...</span></p>
+            <p><strong>Map Container:</strong> <span id="mapStatus">Checking...</span></p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4 mb-4">
+            <h2 class="text-xl font-semibold mb-4">Simple Map Test</h2>
+            <div id="map"></div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="text-lg font-semibold mb-2">Test Controls</h3>
+            <button id="testMap" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mr-2">
+                Test Map Initialization
+            </button>
+            <button id="addMarker" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                Add Test Marker
+            </button>
+        </div>
+
+        <div id="debugLog" class="mt-4 bg-gray-800 text-green-400 p-4 rounded font-mono text-sm max-h-40 overflow-y-auto">
+            <div>Debug log will appear here...</div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let map;
+        let debugLog = document.getElementById('debugLog');
+        
+        function log(message) {
+            const time = new Date().toLocaleTimeString();
+            debugLog.innerHTML += `<div>[${time}] ${message}</div>`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+            console.log(message);
+        }
+
+        // Update current time
+        document.getElementById('currentTime').textContent = new Date().toLocaleString();
+
+        // Check if Leaflet is loaded
+        if (typeof L !== 'undefined') {
+            document.getElementById('leafletStatus').textContent = '✅ Loaded';
+            document.getElementById('leafletStatus').className = 'text-green-600 font-bold';
+            log('✅ Leaflet library loaded successfully');
+        } else {
+            document.getElementById('leafletStatus').textContent = '❌ Failed';
+            document.getElementById('leafletStatus').className = 'text-red-600 font-bold';
+            log('❌ Leaflet library failed to load');
+        }
+
+        // Test map initialization
+        document.getElementById('testMap').addEventListener('click', function() {
+            try {
+                log('🗺️ Attempting to initialize map...');
+                
+                if (typeof L === 'undefined') {
+                    log('❌ Leaflet not available');
+                    return;
+                }
+
+                if (map) {
+                    map.remove();
+                    log('🗑️ Removed existing map');
+                }
+
+                map = L.map('map').setView([40.7128, -74.0060], 10);
+                log('✅ Map created successfully');
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(map);
+                log('✅ Tile layer added successfully');
+
+                document.getElementById('mapStatus').textContent = '✅ Working';
+                document.getElementById('mapStatus').className = 'text-green-600 font-bold';
+                
+            } catch (error) {
+                log('❌ Error initializing map: ' + error.message);
+                document.getElementById('mapStatus').textContent = '❌ Error: ' + error.message;
+                document.getElementById('mapStatus').className = 'text-red-600 font-bold';
+            }
+        });
+
+        // Add test marker
+        document.getElementById('addMarker').addEventListener('click', function() {
+            if (!map) {
+                log('❌ Map not initialized. Click "Test Map Initialization" first.');
+                return;
+            }
+
+            try {
+                const marker = L.marker([40.7128, -74.0060]).addTo(map);
+                marker.bindPopup('Hello! This is a test marker.').openPopup();
+                log('✅ Test marker added successfully');
+            } catch (error) {
+                log('❌ Error adding marker: ' + error.message);
+            }
+        });
+
+        // Auto-initialize map on page load
+        window.addEventListener('load', function() {
+            log('📄 Page loaded, attempting auto-initialization...');
+            setTimeout(() => {
+                document.getElementById('testMap').click();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

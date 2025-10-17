@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Sales Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .login-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="login-bg min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full mx-4">
+        <!-- Login Card -->
+        <div class="bg-white rounded-lg shadow-xl p-8">
+            <div class="text-center mb-8">
+                <div class="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                    <i class="fas fa-chart-line text-2xl text-blue-600"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">Sales Management</h1>
+                <p class="text-gray-600 mt-2">Sign in to your account</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                    <div class="relative">
+                        <input type="email" id="email" name="email" required 
+                               class="w-full px-4 py-3 pl-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="Enter your email">
+                        <i class="fas fa-envelope absolute left-4 top-4 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <div class="relative">
+                        <input type="password" id="password" name="password" required 
+                               class="w-full px-4 py-3 pl-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                               placeholder="Enter your password">
+                        <i class="fas fa-lock absolute left-4 top-4 text-gray-400"></i>
+                        <button type="button" id="togglePassword" class="absolute right-4 top-4 text-gray-400 hover:text-gray-600">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="remember" name="remember" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="remember" class="ml-2 block text-sm text-gray-700">Remember me</label>
+                    </div>
+                    <a href="#" class="text-sm text-blue-600 hover:text-blue-800">Forgot password?</a>
+                </div>
+
+                <button type="submit" id="loginBtn" 
+                        class="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-200 flex items-center justify-center">
+                    <i class="fas fa-sign-in-alt mr-2"></i>
+                    <span>Sign In</span>
+                </button>
+
+                <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    <span id="errorText"></span>
+                </div>
+
+                <div id="successMessage" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg">
+                    <i class="fas fa-check-circle mr-2"></i>
+                    <span id="successText"></span>
+                </div>
+            </form>
+
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-600">
+                    Don't have an account? 
+                    <a href="/register" class="text-blue-600 hover:text-blue-800 font-medium">Sign up here</a>
+                </p>
+            </div>
+        </div>
+
+        <!-- Demo Credentials -->
+        <div class="mt-6 bg-white bg-opacity-90 rounded-lg p-4">
+            <h3 class="text-sm font-medium text-gray-800 mb-2">Demo Credentials:</h3>
+            <div class="text-xs text-gray-600 space-y-1">
+                <p><strong>Admin:</strong> admin@example.com / admin123</p>
+                <p><strong>Manager:</strong> manager@example.com / manager123</p>
+                <p><strong>Sales:</strong> sales@example.com / sales123</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Password toggle functionality
+        document.getElementById('togglePassword').addEventListener('click', function() {
+            const passwordField = document.getElementById('password');
+            const toggleIcon = this.querySelector('i');
+            
+            if (passwordField.type === 'password') {
+                passwordField.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordField.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        });
+
+        // Login form submission
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+            
+            // Hide previous messages
+            errorMessage.classList.add('hidden');
+            successMessage.classList.add('hidden');
+            
+            // Show loading state
+            loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Signing In...';
+            loginBtn.disabled = true;
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store token in localStorage
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    
+                    // Show success message
+                    document.getElementById('successText').textContent = 'Login successful! Redirecting...';
+                    successMessage.classList.remove('hidden');
+                    
+                    // Redirect to dashboard after a short delay
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1500);
+                } else {
+                    // Show error message
+                    document.getElementById('errorText').textContent = data.error || 'Login failed. Please try again.';
+                    errorMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                document.getElementById('errorText').textContent = 'Network error. Please check your connection.';
+                errorMessage.classList.remove('hidden');
+            } finally {
+                // Reset button state
+                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i><span>Sign In</span>';
+                loginBtn.disabled = false;
+            }
+        });
+
+        // Check if user is already logged in
+        if (localStorage.getItem('token')) {
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

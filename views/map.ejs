@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map View - Sales Management System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .sidebar {
+            transition: transform 0.3s ease-in-out;
+        }
+        .sidebar-hidden {
+            transform: translateX(-100%);
+        }
+        #map {
+            height: 600px;
+            width: 100%;
+        }
+        .leaflet-popup-content {
+            font-family: inherit;
+        }
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation Header -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center">
+                    <button id="sidebarToggle" class="mr-4 text-gray-600 hover:text-gray-900">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <h1 class="text-2xl font-bold text-gray-800">Sales Management</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <button class="text-gray-600 hover:text-gray-900">
+                            <i class="fas fa-bell text-xl"></i>
+                            <span class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">3</span>
+                        </button>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <img src="https://via.placeholder.com/40" alt="Profile" class="rounded-full">
+                        <span class="text-gray-700">Admin User</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg">
+            <div class="p-6">
+                <nav class="space-y-2">
+                    <a href="/" class="flex items-center space-x-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg">
+                        <i class="fas fa-home"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="/products" class="flex items-center space-x-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg">
+                        <i class="fas fa-box"></i>
+                        <span>Products</span>
+                    </a>
+                    <a href="/tasks" class="flex items-center space-x-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg">
+                        <i class="fas fa-tasks"></i>
+                        <span>Tasks</span>
+                    </a>
+                    <a href="/invoices" class="flex items-center space-x-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg">
+                        <i class="fas fa-file-invoice"></i>
+                        <span>Invoices</span>
+                    </a>
+                    <a href="/reports" class="flex items-center space-x-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Reports</span>
+                    </a>
+                    <a href="/uploads" class="flex items-center space-x-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg">
+                        <i class="fas fa-upload"></i>
+                        <span>Uploads</span>
+                    </a>
+                    <a href="/chat" class="flex items-center space-x-3 text-gray-700 hover:bg-gray-100 p-3 rounded-lg">
+                        <i class="fas fa-comments"></i>
+                        <span>Chat</span>
+                    </a>
+                    <a href="/map" class="flex items-center space-x-3 text-blue-600 bg-blue-50 p-3 rounded-lg">
+                        <i class="fas fa-map"></i>
+                        <span>Map View</span>
+                    </a>
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 ml-64 p-6">
+            <div class="mb-6 flex justify-between items-center">
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-800">Map View</h2>
+                    <p class="text-gray-600 mt-2">Track tasks, locations, and sales activities</p>
+                </div>
+                <div class="flex space-x-3">
+                    <button id="refreshMap" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center space-x-2">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Refresh</span>
+                    </button>
+                    <button id="centerMap" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 flex items-center space-x-2">
+                        <i class="fas fa-crosshairs"></i>
+                        <span>Center</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Map Controls -->
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex flex-wrap gap-4 items-center">
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="showTasks" checked class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="showTasks" class="text-sm text-gray-700">Show Tasks</label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="showInvoices" checked class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded">
+                        <label for="showInvoices" class="text-sm text-gray-700">Show Invoices</label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="showProducts" checked class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                        <label for="showProducts" class="text-sm text-gray-700">Show Products</label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="showUsers" checked class="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded">
+                        <label for="showUsers" class="text-sm text-gray-700">Show Users</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Container -->
+            <div class="bg-white rounded-lg shadow overflow-hidden">
+                <div id="map"></div>
+            </div>
+
+            <!-- Map Legend -->
+            <div class="mt-4 bg-white rounded-lg shadow p-4">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">Legend</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-4 h-4 bg-blue-500 rounded-full"></div>
+                        <span class="text-sm text-gray-700">Tasks</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-4 h-4 bg-green-500 rounded-full"></div>
+                        <span class="text-sm text-gray-700">Invoices</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-4 h-4 bg-purple-500 rounded-full"></div>
+                        <span class="text-sm text-gray-700">Products</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-4 h-4 bg-orange-500 rounded-full"></div>
+                        <span class="text-sm text-gray-700">Users</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Overlay for mobile -->
+    <div id="overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden"></div>
+
+    <!-- Include Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Include our map functionality -->
+    <script src="/js/map.js"></script>
+    <script src="/js/sidebar.js"></script>
+</body>
+</html>
