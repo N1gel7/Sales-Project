@@ -101,10 +101,10 @@ export const api = {
   },
   // uploads
   listUploads() {
-    return http('/api/uploads');
+    return http('/api/general?type=uploads');
   },
   createUpload(formData: FormData) {
-    return fetch('/api/uploads', {
+    return fetch('/api/general?type=uploads', {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` },
       body: formData

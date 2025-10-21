@@ -21,6 +21,8 @@ export default async function handler(req, res) {
       return handleChatMessages(req, res);
     } else if (path.includes('/reports') || req.query.type === 'reports') {
       return handleReports(req, res);
+    } else if (req.query.type === 'uploads') {
+      return handleUploads(req, res);
     } else if (path.includes('/seed') || req.query.type === 'seed') {
       return handleSeed(req, res);
     } else if (path.includes('/logout-all') || req.query.type === 'logout-all') {
@@ -102,6 +104,23 @@ async function handleReports(req, res) {
       createdAt: new Date().toISOString()
     };
     res.status(201).json(report);
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
+  }
+}
+
+async function handleUploads(req, res) {
+  if (req.method === 'GET') {
+    // Return empty array for now - can be extended later
+    res.json([]);
+  } else if (req.method === 'POST') {
+    // For now, just return a mock response
+    const upload = {
+      _id: `upload_${Date.now()}`,
+      filename: 'uploaded_file.txt',
+      createdAt: new Date().toISOString()
+    };
+    res.status(201).json(upload);
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }

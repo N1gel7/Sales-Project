@@ -3,9 +3,10 @@ import Product from '../models/Product.js';
 import Category from '../models/Category.js';
 
 export default async function handler(req, res) {
-  await dbConnect(process.env.MONGODB_URI);
-  
-  if (req.method === 'GET') {
+  try {
+    await dbConnect(process.env.MONGODB_URI);
+    
+    if (req.method === 'GET') {
     const { q, category } = req.query || {};
     const filter = {};
     if (q) filter.name = { $regex: String(q), $options: 'i' };
@@ -35,4 +36,8 @@ export default async function handler(req, res) {
   }
   
   return res.status(405).end();
+  } catch (error) {
+    console.error('Products API error:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
+  }
 }

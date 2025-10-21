@@ -16,11 +16,11 @@
     "api/tasks.js": { "maxDuration": 30 },
     "api/invoices.js": { "maxDuration": 30 },
     "api/dashboard.js": { "maxDuration": 30 },
+    "api/dashboard/stats.js": { "maxDuration": 30 },
+    "api/dashboard/activity.js": { "maxDuration": 30 },
     "api/users.js": { "maxDuration": 30 },
     "api/sessions.js": { "maxDuration": 30 },
     "api/categories.js": { "maxDuration": 30 },
-    "api/uploads.js": { "maxDuration": 30 },
-    "api/general.js": { "maxDuration": 30 },
-    "api/health.js": { "maxDuration": 30 }
+    "api/general.js": { "maxDuration": 30 }
   }
 }
