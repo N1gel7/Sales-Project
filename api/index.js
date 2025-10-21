@@ -1,20 +1,22 @@
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const multer = require('multer');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import crypto from 'crypto';
 
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Category = require('../models/Category');
-const Task = require('../models/Task');
-const Invoice = require('../models/Invoice');
-const Upload = require('../models/Upload');
-const Activity = require('../models/Activity');
-const Chat = require('../models/Chat');
-const Report = require('../models/Report');
-const Session = require('../models/Session');
+import User from '../models/User.js';
+import Product from '../models/Product.js';
+import Category from '../models/Category.js';
+import Task from '../models/Task.js';
+import Invoice from '../models/Invoice.js';
+import Upload from '../models/Upload.js';
+import Activity from '../models/Activity.js';
+import Chat from '../models/Chat.js';
+import Report from '../models/Report.js';
+import Session from '../models/Session.js';
+import { cleanupExpiredSessions, getUserSessions, revokeSession, revokeAllUserSessions, extendSession } from './_lib/sessionUtils.js';
 
 const app = express();
 
@@ -175,7 +177,6 @@ app.post(['/api/login', '/login'], async (req, res) => {
     }
     
     // Generate a secure random token
-    const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
     
     // Set expiration time (24 hours)
@@ -227,7 +228,6 @@ app.post(['/api/signup', '/signup'], async (req, res) => {
     await user.save();
     
     // Generate a secure random token
-    const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
     
     // Set expiration time (24 hours)
@@ -282,6 +282,75 @@ app.post('/api/logout-all', requireAuth, async (req, res) => {
     await Session.deleteMany({ userId });
     
     res.json({ message: 'Logged out from all devices successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user's active sessions
+app.get('/api/sessions', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const sessions = await getUserSessions(userId);
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Revoke a specific session
+app.delete('/api/sessions/:token', requireAuth, async (req, res) => {
+  try {
+    const { token } = req.params;
+    const userId = req.user.uid;
+    
+    // Verify the session belongs to the current user
+    const session = await Session.findOne({ token, userId });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    const success = await revokeSession(token);
+    if (success) {
+      res.json({ message: 'Session revoked successfully' });
+    } else {
+      res.status(404).json({ error: 'Session not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Extend current session
+app.post('/api/sessions/extend', requireAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    const { hours = 24 } = req.body;
+    
+    const success = await extendSession(token, hours);
+    if (success) {
+      res.json({ message: 'Session extended successfully' });
+    } else {
+      res.status(400).json({ error: 'Failed to extend session' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cleanup expired sessions (admin endpoint)
+app.post('/api/admin/cleanup-sessions', requireAuth, async (req, res) => {
+  try {
+    // Only allow admin users to cleanup sessions
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const deletedCount = await cleanupExpiredSessions();
+    res.json({ 
+      message: 'Session cleanup completed',
+      deletedCount 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1137,4 +1206,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = app;
+export default app;

@@ -150,6 +150,19 @@ export const api = {
   seedData() {
     return http('/api/seed', { method: 'POST' });
   },
+  // session management
+  getSessions() {
+    return http('/api/sessions');
+  },
+  revokeSession(token: string) {
+    return http(`/api/sessions/${token}`, { method: 'DELETE' });
+  },
+  extendSession(hours?: number) {
+    return http('/api/sessions/extend', { method: 'POST', body: { hours } });
+  },
+  logoutAll() {
+    return http('/api/logout-all', { method: 'POST' });
+  },
 };
 
 

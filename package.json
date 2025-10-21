@@ -1,18 +1,21 @@
 {
-  "name": "sales-mgmt-backend",
+  "name": "sales-mgmt-fullstack",
   "version": "1.0.0",
-  "description": "Sales Management System Backend API",
-  "main": "api/index.js",
-  "type": "commonjs",
+  "description": "Sales Management System - Full Stack Application",
+  "type": "module",
   "scripts": {
     "build": "cd sales-mgmt && npm ci && npm run build",
-    "start": "node api/index.js",
-    "dev": "node server.js"
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:frontend\"",
+    "dev:api": "node server.js",
+    "dev:frontend": "cd sales-mgmt && npm run dev",
+    "start": "node server.js"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.911.0",
     "@aws-sdk/s3-request-presigner": "^3.911.0",

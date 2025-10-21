@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const SessionSchema = new mongoose.Schema({
   token: {
@@ -32,4 +32,4 @@ const SessionSchema = new mongoose.Schema({
 // Index for faster lookups
 SessionSchema.index({ userId: 1, expiresAt: 1 });
 
-module.exports = mongoose.model('Session', SessionSchema);
+export default mongoose.model('Session', SessionSchema);

@@ -102,7 +102,7 @@ Sales Project/
    # MONGODB_URI=mongodb+srv://your-username:your-password@your-cluster.mongodb.net/your-database
 
    # JWT Secret
-   JWT_SECRET=your-super-secret-jwt-key
+   # No JWT_SECRET needed - using database sessions
 
    # Email Service (SendGrid)
    SENDGRID_API_KEY=your-sendgrid-api-key
@@ -195,7 +195,7 @@ npm run lint         # Run ESLint
 2. **Environment Variables in Vercel**
    ```
    MONGODB_URI=mongodb+srv://your-username:your-password@your-cluster.mongodb.net/your-database
-   JWT_SECRET=your-jwt-secret
+   # No JWT_SECRET needed - using database sessions
    SENDGRID_API_KEY=your-sendgrid-key
    R2_ENDPOINT=your-r2-endpoint
    R2_ACCESS_KEY_ID=your-r2-access-key
@@ -264,7 +264,7 @@ After setting up the database, you can create users through the signup endpoint 
    - Verify database user permissions
 
 2. **JWT Token Issues**
-   - Ensure `JWT_SECRET` is set
+   - Ensure `MONGODB_URI` is set
    - Check token expiration (default: 24 hours)
 
 3. **CORS Errors**

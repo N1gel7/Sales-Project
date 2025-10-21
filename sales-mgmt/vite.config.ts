@@ -7,6 +7,18 @@ export default defineConfig({
     proxy: {
       '/api': { target: 'http://localhost:4000', changeOrigin: true }
     }
+  },
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: true
+  },
+  optimizeDeps: {
+    include: ['lucide-react']
   }
 });
 
