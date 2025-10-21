@@ -31,6 +31,9 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 
 const s3Client = process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY ? new S3Client({
   region: 'auto',
@@ -518,9 +521,25 @@ app.post('/api/uploads', requireAuth, upload.single('file'), async (req, res) =>
     
     let fileUrl = null;
     if (req.file) {
-      const key = `uploads/${Date.now()}-${req.file.originalname}`;
-      await uploadToR2(req.file, key);
-      fileUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+      // For now, store files locally in public/uploads
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = path.join(__dirname, '../public/uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      // Generate unique filename
+      const fileName = `${Date.now()}-${req.file.originalname}`;
+      const filePath = path.join(uploadsDir, fileName);
+      
+      // Save file to disk
+      fs.writeFileSync(filePath, req.file.buffer);
+      
+      // Set public URL
+      fileUrl = `/uploads/${fileName}`;
     }
     
     const upload = new Upload({
@@ -778,9 +797,25 @@ app.post('/api/reports/:id/attachments', requireAuth, upload.single('file'), asy
     
     let fileUrl = null;
     if (req.file) {
-      const key = `reports/${req.params.id}/${Date.now()}-${req.file.originalname}`;
-      await uploadToR2(req.file, key);
-      fileUrl = `${process.env.R2_PUBLIC_URL}/${key}`;
+      // Store files locally in public/uploads
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = path.join(__dirname, '../public/uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      
+      // Generate unique filename
+      const fileName = `report-${req.params.id}-${Date.now()}-${req.file.originalname}`;
+      const filePath = path.join(uploadsDir, fileName);
+      
+      // Save file to disk
+      fs.writeFileSync(filePath, req.file.buffer);
+      
+      // Set public URL
+      fileUrl = `/uploads/${fileName}`;
     }
     
     report.attachments.push({
