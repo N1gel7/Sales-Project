@@ -32,20 +32,22 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
-const s3Client = new S3Client({
+const s3Client = process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY ? new S3Client({
   region: 'auto',
   endpoint: process.env.R2_ENDPOINT,
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID,
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
   },
-});
+}) : null;
 
-const openai = new OpenAI({
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-});
+}) : null;
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -115,6 +117,9 @@ const upload = multer({
 
 // Helper function to upload file to R2
 async function uploadToR2(file, key) {
+  if (!s3Client) {
+    throw new Error('S3/R2 client not configured');
+  }
   const command = new PutObjectCommand({
     Bucket: process.env.R2_BUCKET_NAME,
     Key: key,
@@ -553,6 +558,10 @@ app.post('/api/uploads/transcribe', requireAuth, async (req, res) => {
     const audioBuffer = await response.arrayBuffer();
     
     // Transcribe using OpenAI Whisper
+    if (!openai) {
+      return res.status(400).json({ error: 'OpenAI API key not configured' });
+    }
+    
     const transcription = await openai.audio.transcriptions.create({
       file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
       model: 'whisper-1',
@@ -681,6 +690,10 @@ app.post('/api/invoices/:id/email', requireAuth, async (req, res) => {
         </div>
       `
     };
+    
+    if (!process.env.SENDGRID_API_KEY) {
+      return res.status(400).json({ error: 'SendGrid API key not configured' });
+    }
     
     await sgMail.send(msg);
     res.json({ message: 'Invoice sent successfully' });
