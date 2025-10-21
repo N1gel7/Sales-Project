@@ -58,7 +58,7 @@ Sales Project/
 │   └── vite.config.ts
 ├── public/               # Static assets
 ├── views/               # EJS templates (legacy)
-├── server.js            # Local development server
+├── api/                 # Vercel serverless functions
 ├── package.json         # Root dependencies
 └── vercel.json         # Vercel deployment config
 ```
@@ -126,7 +126,7 @@ Sales Project/
    ```bash
    npm run dev
    # or
-   node server.js
+   cd sales-mgmt && npm run dev
    ```
 
 2. **Start the frontend development server**
