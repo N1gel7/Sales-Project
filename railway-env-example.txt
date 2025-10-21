@@ -1,0 +1,26 @@
+# Railway Environment Variables Template
+# Copy these to Railway's environment variables section
+
+# Database
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database_name
+
+# JWT Secret
+JWT_SECRET=your-super-secret-jwt-key-here
+
+# R2/Cloudflare Storage (Optional)
+R2_ACCESS_KEY_ID=your-r2-access-key
+R2_SECRET_ACCESS_KEY=your-r2-secret-key
+R2_ENDPOINT=https://your-account-id.r2.cloudflarestorage.com
+R2_BUCKET_NAME=your-bucket-name
+R2_PUBLIC_URL=https://your-bucket-name.your-domain.com
+
+# SendGrid Email (Optional)
+SENDGRID_API_KEY=your-sendgrid-api-key
+SENDGRID_FROM_EMAIL=noreply@yourdomain.com
+
+# OpenAI API (Optional)
+OPENAI_API_KEY=your-openai-api-key
+
+# Server Configuration
+API_PORT=4000
+NODE_ENV=production

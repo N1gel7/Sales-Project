@@ -1037,4 +1037,14 @@ app.get('/api/test-db', async (req, res) => {
   }
 });
 
+// Start server if this file is run directly (for Railway)
+if (require.main === module) {
+  const PORT = process.env.PORT || process.env.API_PORT || 4000;
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+    console.log(`🗄️  DB test: http://localhost:${PORT}/api/test-db`);
+  });
+}
+
 module.exports = app;

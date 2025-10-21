@@ -8,7 +8,9 @@
     "build": "cd sales-mgmt && npm ci && npm run build",
     "vercel-build": "npm run build",
     "start": "node api/index.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "railway:build": "npm run build",
+    "railway:start": "node api/index.js"
   },
   "engines": {
     "node": ">=18.0.0"
