@@ -204,19 +204,32 @@ export default function Uploads(): React.ReactElement {
                     {upload.type} • {upload.user?.code || 'Unknown'}
                     {upload.coords?.lat && upload.coords?.lng ? ` • 📍 (${upload.coords.lat.toFixed(4)}, ${upload.coords.lng.toFixed(4)})` : null}
                   </div>
-                  {upload.transcript && (
-                    <div className="text-xs text-blue-600 mt-1 italic">"{upload.transcript}"</div>
+                  {upload.type === 'audio' && upload.transcriptStatus && (
+                    <div className="text-xs mt-1">
+                      {upload.transcriptStatus === 'pending' && (
+                        <span className="text-yellow-600">⏳ Transcription pending...</span>
+                      )}
+                      {upload.transcriptStatus === 'processing' && (
+                        <span className="text-blue-600">🔄 Transcribing audio...</span>
+                      )}
+                      {upload.transcriptStatus === 'completed' && upload.transcript && (
+                        <span className="text-green-600 italic">"{upload.transcript}"</span>
+                      )}
+                      {upload.transcriptStatus === 'failed' && (
+                        <span className="text-red-600">❌ Transcription failed</span>
+                      )}
+                    </div>
                   )}
-                  {upload.mediaUrl && (
+                  {(upload.fileUrl || upload.mediaUrl) && (
                     <div className="mt-2">
                       {upload.type === 'image' && (
-                        <img src={upload.mediaUrl} alt="Upload" className="h-20 w-20 object-cover rounded" />
+                        <img src={upload.fileUrl || upload.mediaUrl} alt="Upload" className="h-20 w-20 object-cover rounded" />
                       )}
                       {upload.type === 'video' && (
-                        <video src={upload.mediaUrl} controls className="h-20 w-32 rounded" />
+                        <video src={upload.fileUrl || upload.mediaUrl} controls className="h-20 w-32 rounded" />
                       )}
                       {upload.type === 'audio' && (
-                        <audio src={upload.mediaUrl} controls className="w-full" />
+                        <audio src={upload.fileUrl || upload.mediaUrl} controls className="w-full" />
                       )}
                     </div>
                   )}

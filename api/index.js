@@ -546,6 +546,7 @@ app.post('/api/uploads', requireAuth, upload.single('file'), async (req, res) =>
       type,
       note,
       fileUrl,
+      transcriptStatus: type === 'audio' ? 'pending' : undefined,
       coords: coords ? JSON.parse(coords) : null,
       client: client ? JSON.parse(client) : null,
       user: userId
@@ -568,9 +569,19 @@ app.post('/api/uploads/transcribe', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'File URL is required' });
     }
     
-    // Download the file
-    const response = await fetch(fileUrl);
-    const audioBuffer = await response.arrayBuffer();
+    // Read the file from local storage
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Convert relative URL to file path
+    const fileName = fileUrl.replace('/uploads/', '');
+    const filePath = path.join(__dirname, '../public/uploads', fileName);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Audio file not found' });
+    }
+    
+    const audioBuffer = fs.readFileSync(filePath);
     
     // Transcribe using OpenAI Whisper
     const transcription = await openai.audio.transcriptions.create({
@@ -578,8 +589,30 @@ app.post('/api/uploads/transcribe', requireAuth, async (req, res) => {
       model: 'whisper-1',
     });
     
+    // Find and update the upload record with the transcription
+    const upload = await Upload.findOne({ fileUrl: fileUrl });
+    if (upload) {
+      upload.transcriptStatus = 'processing';
+      await upload.save();
+      
+      upload.transcript = transcription.text;
+      upload.transcriptStatus = 'completed';
+      await upload.save();
+    }
+    
     res.json({ transcription: transcription.text });
   } catch (error) {
+    // Update status to failed if transcription fails
+    try {
+      const upload = await Upload.findOne({ fileUrl: req.body.fileUrl });
+      if (upload) {
+        upload.transcriptStatus = 'failed';
+        await upload.save();
+      }
+    } catch (dbError) {
+      console.error('Failed to update transcript status:', dbError);
+    }
+    
     res.status(500).json({ error: error.message });
   }
 });
