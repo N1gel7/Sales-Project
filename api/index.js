@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -15,6 +14,7 @@ const Upload = require('../models/Upload');
 const Activity = require('../models/Activity');
 const Chat = require('../models/Chat');
 const Report = require('../models/Report');
+const Session = require('../models/Session');
 
 const app = express();
 
@@ -88,17 +88,40 @@ app.use(async (req, res, next) => {
   }
 });
 
-function requireAuth(req, res, next) {
-  const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!token) {
-    return res.status(401).json({ error: 'No token provided' });
-  }
+async function requireAuth(req, res, next) {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    // Find session in database
+    const session = await Session.findOne({ 
+      token, 
+      expiresAt: { $gt: new Date() } 
+    }).populate('userId');
+
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    // Update last accessed time
+    session.lastAccessed = new Date();
+    await session.save();
+
+    // Set user info in request
+    req.user = {
+      uid: session.userId._id,
+      role: session.userId.role,
+      code: session.userId.code,
+      name: session.userId.name,
+      email: session.userId.email
+    };
+
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    console.error('Auth middleware error:', error);
+    return res.status(401).json({ error: 'Authentication failed' });
   }
 }
 
@@ -151,13 +174,32 @@ app.post(['/api/login', '/login'], async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
-    const token = jwt.sign(
-      { uid: user._id, role: user.role, code: user.code, name: user.name, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    // Generate a secure random token
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
     
-    res.json({ token, user: { id: user._id, name: user.name, role: user.role, code: user.code, email: user.email } });
+    // Set expiration time (24 hours)
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    // Create session in database
+    await Session.create({
+      token,
+      userId: user._id,
+      expiresAt,
+      userAgent: req.get('User-Agent') || 'Unknown',
+      ipAddress: req.ip || req.connection.remoteAddress
+    });
+    
+    res.json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        name: user.name, 
+        role: user.role, 
+        code: user.code, 
+        email: user.email 
+      } 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -184,18 +226,66 @@ app.post(['/api/signup', '/signup'], async (req, res) => {
     
     await user.save();
     
-    const token = jwt.sign(
-      { uid: user._id, role: user.role, code: user.code, name: user.name, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    // Generate a secure random token
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
     
-    res.status(201).json({ token, user: { id: user._id, name: user.name, role: user.role, code: user.code, email: user.email } });
+    // Set expiration time (24 hours)
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    
+    // Create session in database
+    await Session.create({
+      token,
+      userId: user._id,
+      expiresAt,
+      userAgent: req.get('User-Agent') || 'Unknown',
+      ipAddress: req.ip || req.connection.remoteAddress
+    });
+    
+    res.status(201).json({ 
+      token, 
+      user: { 
+        id: user._id, 
+        name: user.name, 
+        role: user.role, 
+        code: user.code, 
+        email: user.email 
+      } 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// Logout endpoint
+app.post('/api/logout', requireAuth, async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (token) {
+      // Delete the session from database
+      await Session.deleteOne({ token });
+    }
+    
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Logout from all devices endpoint
+app.post('/api/logout-all', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    
+    // Delete all sessions for this user
+    await Session.deleteMany({ userId });
+    
+    res.json({ message: 'Logged out from all devices successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.get('/api/dashboard/stats', requireAuth, async (req, res) => {
   try {
