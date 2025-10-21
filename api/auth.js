@@ -10,6 +10,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { type, name, email, password, role, code } = req.body || {};
     
+    // Handle signup
     if (type === 'signup') {
       const existing = await User.findOne({ email });
       if (existing) return res.status(409).json({ error: 'User exists' });

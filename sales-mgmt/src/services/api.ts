@@ -48,12 +48,12 @@ export const api = {
   },
   // notifications
   listNotifications(params?: { unread?: boolean }) {
-    const usp = new URLSearchParams(params as any);
+    const usp = new URLSearchParams({ type: 'notifications', ...params } as any);
     const qs = usp.toString();
-    return http(`/api/notifications${qs ? `?${qs}` : ''}`);
+    return http(`/api/general?${qs}`);
   },
   markNotificationRead(taskId: string, notificationId: string) {
-    return http(`/api/notifications/${taskId}/${notificationId}`, { method: 'PATCH' });
+    return http(`/api/general?type=notifications`, { method: 'PATCH', body: { taskId, notificationId } });
   },
   // invoices
   listInvoices() {
@@ -112,10 +112,10 @@ export const api = {
   },
   // chats
   listChats() {
-    return http('/api/chats');
+    return http('/api/general?type=chats');
   },
   createChat(body: { name: string; type: string; participants: any[] }) {
-    return http('/api/chats', { method: 'POST', body });
+    return http('/api/general?type=chats', { method: 'POST', body });
   },
   getChatMessages(chatId: string) {
     return http(`/api/chats/${chatId}/messages`);
@@ -128,10 +128,10 @@ export const api = {
   },
   // reports
   listReports() {
-    return http('/api/reports');
+    return http('/api/general?type=reports');
   },
   createReport(body: any) {
-    return http('/api/reports', { method: 'POST', body });
+    return http('/api/general?type=reports', { method: 'POST', body });
   },
   addReportAttachment(reportId: string, formData: FormData) {
     return fetch(`/api/reports/${reportId}/attachments`, {
@@ -148,7 +148,7 @@ export const api = {
   },
   // seed data
   seedData() {
-    return http('/api/seed', { method: 'POST' });
+    return http('/api/general?type=seed', { method: 'POST' });
   },
   // session management
   getSessions() {
@@ -161,7 +161,7 @@ export const api = {
     return http('/api/sessions/extend', { method: 'POST', body: { hours } });
   },
   logoutAll() {
-    return http('/api/logout-all', { method: 'POST' });
+    return http('/api/general?type=logout-all', { method: 'POST' });
   },
 };
 
