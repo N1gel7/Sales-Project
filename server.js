@@ -689,7 +689,7 @@ app.get('/api/map-data', requireAuth, async (req, res) => {
   }
 });
 
-app.get('/api/users', requireAuth, requireRole('admin', 'manager'), async (_req, res) => {
+app.get('/api/users', requireAuth, async (_req, res) => {
   const docs = await User.find({}, { passwordHash: 0 }).sort({ createdAt: -1 }).limit(100);
   res.json(docs);
 });

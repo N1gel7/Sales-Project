@@ -23,6 +23,8 @@ export default function Login(): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -210,6 +212,42 @@ export default function Login(): React.ReactElement {
                     )}
                   </button>
                 </form>
+
+                {/* Demo Accounts Section */}
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <div className="text-center mb-4">
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Demo Accounts</h3>
+                    <p className="text-xs text-gray-500">Use these credentials to test the application</p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-sm font-medium text-blue-900 mb-1">Admin Account</div>
+                      <div className="text-xs text-blue-700">
+                        <div><strong>Email:</strong> admin@example.com</div>
+                        <div><strong>Password:</strong> Admin#123</div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="text-sm font-medium text-green-900 mb-1">Manager Account</div>
+                      <div className="text-xs text-green-700">
+                        <div><strong>Email:</strong> manager@example.com</div>
+                        <div><strong>Password:</strong> Manager#123</div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                      <div className="text-sm font-medium text-purple-900 mb-1">Sales Rep Account</div>
+                      <div className="text-xs text-purple-700">
+                        <div><strong>Email:</strong> rep1@example.com</div>
+                        <div><strong>Password:</strong> Rep#123</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  
+                </div>
 
               </div>
             </div>

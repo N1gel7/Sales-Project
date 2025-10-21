@@ -241,3 +241,4 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize map when page loads
     initMap();
 });
+

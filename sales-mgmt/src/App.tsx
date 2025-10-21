@@ -222,7 +222,7 @@ function App(): React.ReactElement {
               <SideLink to="/map" icon={<Map size={20} />} label="Map" />
             </nav>
             <div className="p-4 border-t border-gray-100 bg-gray-50">
-              <div className="text-xs text-gray-500 mb-3">Version 0.1.0</div>
+              
               <div className="flex items-center justify-between">
                 <UserInfo />
                 <LogoutButton />
