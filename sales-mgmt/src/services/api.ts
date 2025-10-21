@@ -110,9 +110,6 @@ export const api = {
       body: formData
     });
   },
-  transcribeMedia(fileUrl: string) {
-    return http('/api/uploads/transcribe', { method: 'POST', body: { fileUrl } });
-  },
   // chats
   listChats() {
     return http('/api/chats');

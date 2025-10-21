@@ -102,21 +102,6 @@ export default function Uploads(): React.ReactElement {
       const uploadResult = await res.json();
       console.log('Upload successful:', uploadResult);
       
-      // If it's audio, transcribe it
-      if (selectedFile.type.startsWith('audio/') && uploadResult.fileUrl) {
-        try {
-          await fetch('/api/uploads/transcribe', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ fileUrl: uploadResult.fileUrl })
-          });
-        } catch (e) {
-          console.warn('Transcription failed:', e);
-        }
-      }
       
       setNote(''); setSelectedFile(null);
       await load();
@@ -204,22 +189,6 @@ export default function Uploads(): React.ReactElement {
                     {upload.type} • {upload.user?.code || 'Unknown'}
                     {upload.coords?.lat && upload.coords?.lng ? ` • 📍 (${upload.coords.lat.toFixed(4)}, ${upload.coords.lng.toFixed(4)})` : null}
                   </div>
-                  {upload.type === 'audio' && upload.transcriptStatus && (
-                    <div className="text-xs mt-1">
-                      {upload.transcriptStatus === 'pending' && (
-                        <span className="text-yellow-600">⏳ Transcription pending...</span>
-                      )}
-                      {upload.transcriptStatus === 'processing' && (
-                        <span className="text-blue-600">🔄 Transcribing audio...</span>
-                      )}
-                      {upload.transcriptStatus === 'completed' && upload.transcript && (
-                        <span className="text-green-600 italic">"{upload.transcript}"</span>
-                      )}
-                      {upload.transcriptStatus === 'failed' && (
-                        <span className="text-red-600">❌ Transcription failed</span>
-                      )}
-                    </div>
-                  )}
                   {(upload.fileUrl || upload.mediaUrl) && (
                     <div className="mt-2">
                       {upload.type === 'image' && (
