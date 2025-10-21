@@ -10,6 +10,8 @@
     }
   ],
   "functions": {
+    "api/login.js": { "maxDuration": 30 },
+    "api/signup.js": { "maxDuration": 30 },
     "api/auth.js": { "maxDuration": 30 },
     "api/products.js": { "maxDuration": 30 },
     "api/tasks.js": { "maxDuration": 30 },
@@ -19,6 +21,12 @@
     "api/sessions.js": { "maxDuration": 30 },
     "api/categories.js": { "maxDuration": 30 },
     "api/uploads.js": { "maxDuration": 30 },
-    "api/health.js": { "maxDuration": 30 }
+    "api/health.js": { "maxDuration": 30 },
+    "api/notifications.js": { "maxDuration": 30 },
+    "api/chats.js": { "maxDuration": 30 },
+    "api/chats/[chatId]/messages.js": { "maxDuration": 30 },
+    "api/reports.js": { "maxDuration": 30 },
+    "api/seed.js": { "maxDuration": 30 },
+    "api/logout-all.js": { "maxDuration": 30 }
   }
 }
