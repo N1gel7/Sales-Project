@@ -1,13 +1,5 @@
-import { dbConnect } from './_lib/db.js';
-import User from '../models/User.js';
-import Session from '../models/Session.js';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-
 export default async function handler(req, res) {
   try {
-    await dbConnect(process.env.MONGODB_URI);
-    
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -18,31 +10,50 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-    
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-    
-    // Create session
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    await Session.create({
-      token,
-      userId: user._id,
-      expiresAt,
-      userAgent: req.get('User-Agent') || 'Unknown',
-      ipAddress: req.ip || req.connection.remoteAddress
-    });
-    
+    // Mock user validation - no database required
+    const mockUsers = {
+      'admin@example.com': { 
+        password: 'Admin#123', 
+        role: 'admin', 
+        name: 'Admin User', 
+        code: 'ADM001' 
+      },
+      'manager@example.com': { 
+        password: 'Manager#123', 
+        role: 'manager', 
+        name: 'Manager User', 
+        code: 'MGR001' 
+      },
+      'rep1@example.com': { 
+        password: 'Rep#123', 
+        role: 'sales', 
+        name: 'Sales Rep', 
+        code: 'SAL001' 
+      }
+    };
+
+    const user = mockUsers[email];
+    if (!user || user.password !== password) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate a simple token (no database session required)
+    const token = Buffer.from(JSON.stringify({ 
+      email, 
+      role: user.role, 
+      name: user.name, 
+      code: user.code,
+      exp: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+    })).toString('base64');
+
     return res.status(200).json({ 
       token, 
       user: { 
-        id: user._id, 
+        id: `user_${Date.now()}`,
         name: user.name, 
         role: user.role, 
         code: user.code, 
-        email: user.email 
+        email: email 
       } 
     });
   } catch (error) {

@@ -36,9 +36,9 @@ import { decodeJwt } from './services/http';
 function useUser() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
   if (!token) return null;
-  const payload = decodeJwt<{ uid?: string; role?: string; code?: string; name?: string; email?: string }>(token);
+  const payload = decodeJwt<{ id?: string; role?: string; code?: string; name?: string; email?: string }>(token);
   return payload ? { 
-    id: payload.uid, 
+    id: payload.id, 
     role: payload.role, 
     code: payload.code, 
     name: payload.name, 
