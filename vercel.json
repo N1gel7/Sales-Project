@@ -10,6 +10,7 @@
     }
   ],
   "functions": {
+    "api/test.js": { "maxDuration": 30 },
     "api/login.js": { "maxDuration": 30 },
     "api/auth.js": { "maxDuration": 30 },
     "api/products.js": { "maxDuration": 30 },
@@ -20,7 +21,6 @@
     "api/sessions.js": { "maxDuration": 30 },
     "api/categories.js": { "maxDuration": 30 },
     "api/uploads.js": { "maxDuration": 30 },
-    "api/chats/[chatId]/messages.js": { "maxDuration": 30 },
     "api/general.js": { "maxDuration": 30 }
   }
 }

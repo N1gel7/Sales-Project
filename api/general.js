@@ -1,29 +1,37 @@
 import { dbConnect } from './_lib/db.js';
 import User from '../models/User.js';
+import Session from '../models/Session.js';
 import bcrypt from 'bcryptjs';
 
 export default async function handler(req, res) {
-  await dbConnect(process.env.MONGODB_URI);
-  
-  const { method, url } = req;
-  
-  // Parse the URL to determine the operation
-  const path = url.split('?')[0];
-  
-  // Handle different operations based on URL path or query parameters
-  if (path.includes('/notifications') || req.query.type === 'notifications') {
-    return handleNotifications(req, res);
-  } else if (path.includes('/chats') || req.query.type === 'chats') {
-    return handleChats(req, res);
-  } else if (path.includes('/reports') || req.query.type === 'reports') {
-    return handleReports(req, res);
-  } else if (path.includes('/seed') || req.query.type === 'seed') {
-    return handleSeed(req, res);
-  } else if (path.includes('/logout-all') || req.query.type === 'logout-all') {
-    return handleLogoutAll(req, res);
+  try {
+    await dbConnect(process.env.MONGODB_URI);
+    
+    const { method, url } = req;
+    
+    // Parse the URL to determine the operation
+    const path = url.split('?')[0];
+    
+    // Handle different operations based on URL path or query parameters
+    if (path.includes('/notifications') || req.query.type === 'notifications') {
+      return handleNotifications(req, res);
+    } else if (path.includes('/chats') || req.query.type === 'chats') {
+      return handleChats(req, res);
+    } else if (req.query.type === 'chat-messages') {
+      return handleChatMessages(req, res);
+    } else if (path.includes('/reports') || req.query.type === 'reports') {
+      return handleReports(req, res);
+    } else if (path.includes('/seed') || req.query.type === 'seed') {
+      return handleSeed(req, res);
+    } else if (path.includes('/logout-all') || req.query.type === 'logout-all') {
+      return handleLogoutAll(req, res);
+    }
+    
+    return res.status(404).json({ error: 'Endpoint not found' });
+  } catch (error) {
+    console.error('General API error:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
-  
-  return res.status(404).json({ error: 'Endpoint not found' });
 }
 
 async function handleNotifications(req, res) {
@@ -53,6 +61,30 @@ async function handleChats(req, res) {
       createdAt: new Date().toISOString()
     };
     res.status(201).json(chat);
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
+  }
+}
+
+async function handleChatMessages(req, res) {
+  const { chatId } = req.query;
+  
+  if (req.method === 'GET') {
+    // Return empty array for now - can be extended later
+    res.json([]);
+  } else if (req.method === 'POST') {
+    const { content, type } = req.body || {};
+    const message = {
+      _id: `msg_${Date.now()}`,
+      chatId,
+      content,
+      type: type || 'text',
+      createdAt: new Date().toISOString()
+    };
+    res.status(201).json(message);
+  } else if (req.method === 'PUT') {
+    // Mark chat as read
+    res.json({ success: true });
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
@@ -135,17 +167,18 @@ async function handleLogoutAll(req, res) {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    // Import Session model here to avoid circular dependencies
-    const Session = (await import('../models/Session.js')).default;
-    const { verifyToken } = await import('./_lib/sessionUtils.js');
-    
-    const user = await verifyToken(token);
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid token' });
+    // Find the session to get user ID
+    const session = await Session.findOne({ 
+      token, 
+      expiresAt: { $gt: new Date() } 
+    }).populate('userId');
+
+    if (!session) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
     }
 
     // Delete all sessions for this user
-    await Session.deleteMany({ userId: user._id });
+    await Session.deleteMany({ userId: session.userId._id });
 
     res.json({ message: 'All sessions revoked successfully' });
   } catch (error) {

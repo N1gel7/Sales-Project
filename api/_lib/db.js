@@ -6,6 +6,9 @@ global.mongoose = cached;
 export async function dbConnect(uri) {
   if (cached.conn) return cached.conn;
   if (!cached.promise) {
+    if (!uri) {
+      throw new Error('MONGODB_URI environment variable is not set');
+    }
     // Respect the DB specified in the URI; no hardcoded dbName here
     cached.promise = mongoose.connect(uri).then(m => m);
   }

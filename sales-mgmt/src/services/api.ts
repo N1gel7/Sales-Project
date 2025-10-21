@@ -118,13 +118,13 @@ export const api = {
     return http('/api/general?type=chats', { method: 'POST', body });
   },
   getChatMessages(chatId: string) {
-    return http(`/api/chats/${chatId}/messages`);
+    return http(`/api/general?type=chat-messages&chatId=${chatId}`);
   },
   sendMessage(chatId: string, body: { content: string; type?: string }) {
-    return http(`/api/chats/${chatId}/messages`, { method: 'POST', body });
+    return http(`/api/general?type=chat-messages&chatId=${chatId}`, { method: 'POST', body });
   },
   markChatRead(chatId: string) {
-    return http(`/api/chats/${chatId}/read`, { method: 'PUT' });
+    return http(`/api/general?type=chat-messages&chatId=${chatId}`, { method: 'PUT' });
   },
   // reports
   listReports() {
