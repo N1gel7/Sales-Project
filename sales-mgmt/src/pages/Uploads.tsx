@@ -74,19 +74,22 @@ export default function Uploads(): React.ReactElement {
       console.log('User:', user);
       console.log('Token exists:', !!token);
       
-      const res = await fetch('/api/media-upload', {
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('type', selectedFile.type.startsWith('image/') ? 'image' : 
+                            selectedFile.type.startsWith('video/') ? 'video' : 'audio');
+      formData.append('note', note);
+      if (location) {
+        formData.append('coords', JSON.stringify(location));
+      }
+      
+      const res = await fetch('/api/uploads', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ 
-          type: selectedFile.type.startsWith('image/') ? 'image' : 
-                selectedFile.type.startsWith('video/') ? 'video' : 'audio',
-          note, 
-          coords: location,
-          user
-        })
+        body: formData
       });
       
       console.log('Response status:', res.status);
@@ -96,49 +99,19 @@ export default function Uploads(): React.ReactElement {
         throw new Error(`Server error: ${res.status} - ${errorText}`);
       }
       
-      const { uploadUrl, uploadId, publicUrl } = await res.json();
-      
-      // Upload file directly to R2 with progress tracking
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        
-        xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            const percentComplete = (e.loaded / e.total) * 100;
-            setUploadProgress(Math.round(percentComplete));
-            console.log(`Upload progress: ${Math.round(percentComplete)}%`);
-          }
-        });
-        
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(xhr.response);
-          } else {
-            reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
-          }
-        });
-        
-        xhr.addEventListener('error', () => {
-          reject(new Error('Upload failed: Network error'));
-        });
-        
-        xhr.addEventListener('timeout', () => {
-          reject(new Error('Upload failed: Timeout'));
-        });
-        
-        xhr.open('PUT', uploadUrl);
-        xhr.setRequestHeader('Content-Type', selectedFile.type);
-        xhr.timeout = 300000; // 5 minutes timeout
-        xhr.send(selectedFile);
-      });
+      const uploadResult = await res.json();
+      console.log('Upload successful:', uploadResult);
       
       // If it's audio, transcribe it
-      if (selectedFile.type.startsWith('audio/')) {
+      if (selectedFile.type.startsWith('audio/') && uploadResult.fileUrl) {
         try {
-          await fetch('/api/media-transcribe', {
+          await fetch('/api/uploads/transcribe', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uploadId, audioUrl: publicUrl })
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ fileUrl: uploadResult.fileUrl })
           });
         } catch (e) {
           console.warn('Transcription failed:', e);
