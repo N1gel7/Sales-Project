@@ -3,7 +3,6 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const sgMail = require('@sendgrid/mail');
 const multer = require('multer');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const OpenAI = require('openai');
@@ -32,9 +31,6 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-if (process.env.SENDGRID_API_KEY) {
-  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-}
 
 const s3Client = process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY ? new S3Client({
   region: 'auto',
@@ -45,9 +41,9 @@ const s3Client = process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KE
   },
 }) : null;
 
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-}) : null;
+});
 
 const MONGODB_URI = process.env.MONGODB_URI;
 
@@ -558,10 +554,6 @@ app.post('/api/uploads/transcribe', requireAuth, async (req, res) => {
     const audioBuffer = await response.arrayBuffer();
     
     // Transcribe using OpenAI Whisper
-    if (!openai) {
-      return res.status(400).json({ error: 'OpenAI API key not configured' });
-    }
-    
     const transcription = await openai.audio.transcriptions.create({
       file: new File([audioBuffer], 'audio.mp3', { type: 'audio/mpeg' }),
       model: 'whisper-1',
@@ -617,91 +609,6 @@ app.delete('/api/invoices/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Email invoice
-app.post('/api/invoices/:id/email', requireAuth, async (req, res) => {
-  try {
-    const { email, subject, message } = req.body;
-    const invoice = await Invoice.findById(req.params.id);
-    
-    if (!invoice) {
-      return res.status(404).json({ error: 'Invoice not found' });
-    }
-    
-    const invoiceId = invoice._id.toString().slice(-8);
-    
-    const msg = {
-      to: email,
-      from: process.env.SENDGRID_FROM_EMAIL,
-      subject: subject || `Invoice #${invoiceId} - ${invoice.client}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
-            <h1 style="margin: 0; font-size: 28px;">Invoice #${invoiceId}</h1>
-            <p style="margin: 10px 0 0 0; opacity: 0.9;">Sales Management System</p>
-          </div>
-          
-          <div style="background: white; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
-            <div style="margin-bottom: 30px;">
-              <h2 style="color: #374151; margin-bottom: 20px;">Invoice Details</h2>
-              <div style="background: #f9fafb; padding: 20px; border-radius: 8px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                  <span style="font-weight: 600; color: #6b7280;">Client:</span>
-                  <span style="color: #374151;">${invoice.client}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                  <span style="font-weight: 600; color: #6b7280;">Product:</span>
-                  <span style="color: #374151;">${invoice.product}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                  <span style="font-weight: 600; color: #6b7280;">Quantity:</span>
-                  <span style="color: #374151;">${invoice.quantity}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                  <span style="font-weight: 600; color: #6b7280;">Price per unit:</span>
-                  <span style="color: #374151;">${formatCurrency(invoice.price / invoice.quantity)}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                  <span style="font-weight: 600; color: #6b7280;">Total Amount:</span>
-                  <span style="color: #059669; font-weight: 700; font-size: 18px;">${formatCurrency(invoice.price)}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                  <span style="font-weight: 600; color: #6b7280;">Date:</span>
-                  <span style="color: #374151;">${formatDate(invoice.createdAt)}</span>
-                </div>
-              </div>
-            </div>
-            
-            ${message ? `
-              <div style="margin-bottom: 30px;">
-                <h3 style="color: #374151; margin-bottom: 15px;">Message</h3>
-                <div style="background: #f0f9ff; padding: 15px; border-left: 4px solid #3b82f6; border-radius: 4px;">
-                  <p style="margin: 0; color: #1e40af;">${message}</p>
-                </div>
-              </div>
-            ` : ''}
-            
-            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-              <p style="color: #6b7280; font-size: 14px; margin: 0;">
-                Thank you for your business!<br>
-                This invoice was generated by Sales Management System
-              </p>
-            </div>
-          </div>
-        </div>
-      `
-    };
-    
-    if (!process.env.SENDGRID_API_KEY) {
-      return res.status(400).json({ error: 'SendGrid API key not configured' });
-    }
-    
-    await sgMail.send(msg);
-    res.json({ message: 'Invoice sent successfully' });
-  } catch (error) {
-    console.error('SendGrid error:', error);
-    res.status(500).json({ error: 'Failed to send email: ' + error.message });
-  }
-});
 
 
 app.get('/api/chats', requireAuth, async (req, res) => {
