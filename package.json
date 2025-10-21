@@ -4,7 +4,7 @@
   "description": "Sales Management System - Full Stack Application",
   "type": "module",
   "scripts": {
-    "build": "cd sales-mgmt && npm ci && npm run build",
+    "build": "cd sales-mgmt && npm install && npm run build",
     "dev": "cd sales-mgmt && npm run dev",
     "start": "cd sales-mgmt && npm run preview"
   },

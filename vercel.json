@@ -1,25 +1,8 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/**/*.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "sales-mgmt/dist/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/sales-mgmt/dist/$1"
-    }
-  ],
+  "buildCommand": "npm install && cd sales-mgmt && npm install && npm run build",
+  "outputDirectory": "sales-mgmt/dist",
+  "installCommand": "npm install",
   "functions": {
     "api/auth.js": { "maxDuration": 30 },
     "api/products.js": { "maxDuration": 30 },
