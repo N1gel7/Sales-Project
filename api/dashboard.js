@@ -5,10 +5,11 @@ import Upload from '../models/Upload.js';
 import User from '../models/User.js';
 
 export default async function handler(req, res) {
-  await dbConnect(process.env.MONGODB_URI);
-  
-  if (req.method === 'GET') {
-    const { startDate, endDate, userId } = req.query;
+  try {
+    await dbConnect(process.env.MONGODB_URI);
+    
+    if (req.method === 'GET') {
+      const { startDate, endDate, userId, type } = req.query;
     
     const end = endDate ? new Date(endDate) : new Date();
     const start = startDate ? new Date(startDate) : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -60,13 +61,74 @@ export default async function handler(req, res) {
       });
     }
     
-    res.json({
-      taskStats,
-      salesStats,
-      dailySales,
-      dateRange: { start, end }
-    });
+      // Handle activity request
+      if (type === 'activity') {
+        const { limit = 10 } = req.query;
+        
+        // Get recent activities from different collections
+        const [recentTasks, recentInvoices, recentUploads] = await Promise.all([
+          Task.find({}).sort({ createdAt: -1 }).limit(parseInt(limit)).lean(),
+          Invoice.find({}).sort({ createdAt: -1 }).limit(parseInt(limit)).lean(),
+          Upload.find({}).sort({ createdAt: -1 }).limit(parseInt(limit)).lean()
+        ]);
+        
+        // Combine and format activities
+        const activities = [];
+        
+        // Add task activities
+        recentTasks.forEach(task => {
+          activities.push({
+            id: `task_${task._id}`,
+            type: 'task',
+            action: `Task "${task.title}" ${task.status}`,
+            user: task.assignee?.name || 'Unknown',
+            timestamp: task.createdAt,
+            status: task.status
+          });
+        });
+        
+        // Add invoice activities
+        recentInvoices.forEach(invoice => {
+          activities.push({
+            id: `invoice_${invoice._id}`,
+            type: 'invoice',
+            action: `Invoice created for ${invoice.client}`,
+            user: 'System',
+            timestamp: invoice.createdAt,
+            amount: invoice.price
+          });
+        });
+        
+        // Add upload activities
+        recentUploads.forEach(upload => {
+          activities.push({
+            id: `upload_${upload._id}`,
+            type: 'upload',
+            action: `File uploaded: ${upload.filename}`,
+            user: 'System',
+            timestamp: upload.createdAt,
+            filename: upload.filename
+          });
+        });
+        
+        // Sort by timestamp and limit
+        activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        return res.json(activities.slice(0, parseInt(limit)));
+      }
+      
+      // Default stats response
+      res.json({
+        taskStats,
+        salesStats,
+        dailySales,
+        dateRange: { start, end }
+      });
+    }
+    
+    return res.status(405).end();
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    return res.status(500).json({ error: 'Internal server error', details: error.message });
   }
-  
-  return res.status(405).end();
 }
