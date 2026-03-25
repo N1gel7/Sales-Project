@@ -1,17 +1,11 @@
-import { dbConnect } from './_lib/db.js';
-import User from '../models/User.js';
-
 export default async function handler(req, res) {
-  await dbConnect(process.env.MONGODB_URI);
+  if (req.method !== 'GET') return res.status(405).end();
   
-  if (req.method === 'GET') {
-    try {
-      const users = await User.find().select('_id name email code role createdAt').sort({ createdAt: -1 });
-      return res.status(200).json(users);
-    } catch (error) {
-      return res.status(500).json({ error: 'Failed to fetch users' });
-    }
-  }
+  const mockUsers = [
+    { _id: 'user_admin', name: 'Admin User', email: 'admin@example.com', code: 'ADM001', role: 'admin' },
+    { _id: 'user_manager', name: 'Manager User', email: 'manager@example.com', code: 'MGR001', role: 'manager' },
+    { _id: 'user_rep1', name: 'Sales Rep', email: 'rep1@example.com', code: 'SAL001', role: 'sales' }
+  ];
   
-  return res.status(405).end();
+  return res.status(200).json(mockUsers);
 }

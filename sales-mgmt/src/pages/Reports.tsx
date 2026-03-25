@@ -104,14 +104,14 @@ export default function ReportsPage() {
   });
 
   useEffect(() => {
-    // Get current user ID from token
-    const token = localStorage.getItem('auth_token');
-    if (token) {
+    // Get current user ID from localStorage
+    const userInfo = localStorage.getItem('user_info');
+    if (userInfo) {
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        setCurrentUserId(payload.uid);
+        const user = JSON.parse(userInfo);
+        setCurrentUserId(user._id || user.id);
       } catch (error) {
-        console.error('Failed to decode token:', error);
+        console.error('Failed to parse user info:', error);
       }
     }
     

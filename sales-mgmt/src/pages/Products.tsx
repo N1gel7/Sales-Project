@@ -32,7 +32,9 @@ export default function Products(): React.ReactElement {
                 <div key={p._id} className="card">
                   <div className="card-body">
                     <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-gray-500">{p.category} • GHS {p.price}</div>
+                    <div className="text-xs text-gray-500">
+                      {typeof p.category === 'object' ? p.category.name : p.category} • GHS {p.price}
+                    </div>
                   </div>
                 </div>
               ))}

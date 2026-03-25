@@ -31,19 +31,16 @@ import Categories from './pages/Categories';
 import Invoices from './pages/Invoices';
 import Chat from './pages/Chat';
 import Reports from './pages/Reports';
-import { decodeJwt } from './services/http';
+// Removed JWT decoding for simplified auth
 
 function useUser() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-  if (!token) return null;
-  const payload = decodeJwt<{ id?: string; role?: string; code?: string; name?: string; email?: string }>(token);
-  return payload ? { 
-    id: payload.id, 
-    role: payload.role, 
-    code: payload.code, 
-    name: payload.name, 
-    email: payload.email 
-  } : null;
+  const userInfo = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
+  if (!userInfo) return null;
+  try {
+    return JSON.parse(userInfo);
+  } catch {
+    return null;
+  }
 }
 
 function useRole(): string | null {
@@ -137,9 +134,11 @@ function LogoutButton() {
 }
 
 function App(): React.ReactElement {
+  const role = useRole();
   const location = useLocation();
   const isAuthRoute = location.pathname === '/login';
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
 
   if (isAuthRoute) {
     return (
@@ -173,12 +172,20 @@ function App(): React.ReactElement {
                 </div>
                 <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                   <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" />
-                  <SideLink to="/products" icon={<Package size={20} />} label="Products" />
-                  <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" />
+                  {(role === 'admin' || role === 'manager') && (
+                    <>
+                      <SideLink to="/products" icon={<Package size={20} />} label="Products" />
+                      <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" />
+                    </>
+                  )}
                   <SideLink to="/tasks" icon={<ClipboardList size={20} />} label="Tasks" />
                   <SideLink to="/uploads" icon={<Upload size={20} />} label="Uploads" />
-                  <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" />
-                  <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" />
+                  {(role === 'admin' || role === 'sales') && (
+                    <>
+                      <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" />
+                      <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" />
+                    </>
+                  )}
                   <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" />
                   <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" />
                   <SideLink to="/map" icon={<Map size={20} />} label="Map" />
@@ -211,12 +218,20 @@ function App(): React.ReactElement {
             </div>
             <nav className="flex-1 p-4 space-y-2">
               <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" />
-              <SideLink to="/products" icon={<Package size={20} />} label="Products" />
-              <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" />
+              {(role === 'admin' || role === 'manager') && (
+                <>
+                  <SideLink to="/products" icon={<Package size={20} />} label="Products" />
+                  <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" />
+                </>
+              )}
               <SideLink to="/tasks" icon={<ClipboardList size={20} />} label="Tasks" />
               <SideLink to="/uploads" icon={<Upload size={20} />} label="Uploads" />
-              <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" />
-              <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" />
+              {(role === 'admin' || role === 'sales') && (
+                <>
+                  <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" />
+                  <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" />
+                </>
+              )}
               <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" />
               <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" />
               <SideLink to="/map" icon={<Map size={20} />} label="Map" />
@@ -284,8 +299,8 @@ function App(): React.ReactElement {
           <main className="flex-1 p-4 sm:p-6 lg:p-8">
             <Routes>
               <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-              <Route path="/products" element={<RequireAuth roles={["admin","manager"]}><Products /></RequireAuth>} />
-              <Route path="/categories" element={<RequireAuth roles={["admin","manager"]}><Categories /></RequireAuth>} />
+              <Route path="/products" element={<RequireAuth roles={["admin","manager","sales"]}><Products /></RequireAuth>} />
+              <Route path="/categories" element={<RequireAuth roles={["admin","manager","sales"]}><Categories /></RequireAuth>} />
               <Route path="/tasks" element={<RequireAuth roles={["sales","manager","admin"]}><Tasks /></RequireAuth>} />
               <Route path="/uploads" element={<RequireAuth roles={["sales","manager","admin"]}><Uploads /></RequireAuth>} />
               <Route path="/billing" element={<RequireAuth roles={["sales","manager","admin"]}><Billing /></RequireAuth>} />

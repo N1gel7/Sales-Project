@@ -1,87 +1,64 @@
-import { dbConnect } from './_lib/db.js';
-import User from '../models/User.js';
-import Session from '../models/Session.js';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-
 export default async function handler(req, res) {
   try {
-    await dbConnect(process.env.MONGODB_URI);
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid JSON body' });
+      }
+    }
+
+    const { type, email: rawEmail, password } = body || {};
+    const email = rawEmail?.toLowerCase().trim();
     
-    if (req.method === 'POST') {
-      const { type, name, email, password, role, code } = req.body || {};
-      
-      // Handle signup
-      if (type === 'signup') {
-        const existing = await User.findOne({ email });
-        if (existing) return res.status(409).json({ error: 'User exists' });
-        const passwordHash = await bcrypt.hash(password, 10);
-        const user = await User.create({ 
-          name, 
-          email, 
-          passwordHash, 
-          role: role || 'sales',
-          code: code || `SS${Date.now().toString().slice(-6)}`
-        });
-        
-        // Create session
-        const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await Session.create({
-          token,
-          userId: user._id,
-          expiresAt,
-          userAgent: req.get('User-Agent') || 'Unknown',
-          ipAddress: req.ip || req.connection.remoteAddress
-        });
-        
-        return res.status(201).json({ 
-          token, 
-          user: { 
-            id: user._id, 
-            name: user.name, 
-            role: user.role, 
-            code: user.code, 
-            email: user.email 
-          } 
-        });
+    if (type === 'login' || type === 'signup') {
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password required' });
       }
+
+      // Mock users
+      const mockUsers = {
+        'admin@example.com': { password: 'Admin#123', role: 'admin', name: 'Admin User', code: 'ADM001' },
+        'manager@example.com': { password: 'Manager#123', role: 'manager', name: 'Manager User', code: 'MGR001' },
+        'rep1@example.com': { password: 'Rep#123', role: 'sales', name: 'Sales Rep', code: 'SAL001' }
+      };
+
+      const user = mockUsers[email];
       
-      if (type === 'login') {
-        const user = await User.findOne({ email });
-        if (!user) return res.status(401).json({ error: 'Invalid' });
-        const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return res.status(401).json({ error: 'Invalid' });
-        
-        // Create session
-        const token = crypto.randomBytes(32).toString('hex');
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await Session.create({
-          token,
-          userId: user._id,
-          expiresAt,
-          userAgent: req.get('User-Agent') || 'Unknown',
-          ipAddress: req.ip || req.connection.remoteAddress
-        });
-        
-        return res.status(200).json({ 
-          token, 
-          user: { 
-            id: user._id, 
-            name: user.name, 
-            role: user.role, 
-            code: user.code, 
-            email: user.email 
-          } 
-        });
+      // For mock signup, we'll just allow any new account to be "sales"
+      const finalUser = user || (type === 'signup' ? { role: 'sales', name: email.split('@')[0], code: 'NEW' } : null);
+
+      if (!finalUser || (user && user.password !== password)) {
+        return res.status(401).json({ error: 'Invalid credentials' });
       }
-      
-      return res.status(400).json({ error: 'Unsupported type' });
+
+      // Simple mock token (no JWT)
+      const token = 'mock-session-active';
+
+      return res.status(200).json({ 
+        token, 
+        user: { 
+          id: `user_${Date.now()}`,
+          name: finalUser.name, 
+          role: finalUser.role, 
+          code: finalUser.code, 
+          email: email 
+        } 
+      });
     }
     
-    return res.status(405).end();
+    return res.status(400).json({ error: 'Unsupported type' });
   } catch (error) {
-    console.error('Auth API error:', error);
-    return res.status(500).json({ error: 'Internal server error', details: error.message });
+    console.error('Fatal Auth Error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }

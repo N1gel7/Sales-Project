@@ -1,32 +1,16 @@
-import { dbConnect } from './_lib/db.js';
-import Invoice from '../models/Invoice.js';
-
 export default async function handler(req, res) {
-  await dbConnect(process.env.MONGODB_URI);
-  
+  const mockInvoices = [
+    { _id: 'inv_1', client: 'Client A', product: 'Branding Package', price: 1500, status: 'paid', createdAt: new Date().toISOString() },
+    { _id: 'inv_2', client: 'Client B', product: 'Web Development', price: 3500, status: 'sent', createdAt: new Date().toISOString() },
+    { _id: 'inv_3', client: 'Client C', product: 'SEO Audit', price: 500, status: 'overdue', createdAt: new Date().toISOString() }
+  ];
+
   if (req.method === 'GET') {
-    const docs = await Invoice.find().populate('user', 'name email').sort({ createdAt: -1 }).limit(50);
-    return res.status(200).json(docs);
+    return res.status(200).json(mockInvoices);
   }
   
   if (req.method === 'POST') {
-    const doc = await Invoice.create(req.body);
-    await doc.populate('user', 'name email');
-    return res.status(201).json(doc);
-  }
-  
-  if (req.method === 'PUT') {
-    const { id, ...updateData } = req.body;
-    const doc = await Invoice.findByIdAndUpdate(id, updateData, { new: true }).populate('user', 'name email');
-    if (!doc) return res.status(404).json({ error: 'Invoice not found' });
-    return res.status(200).json(doc);
-  }
-  
-  if (req.method === 'DELETE') {
-    const { id } = req.query;
-    const doc = await Invoice.findByIdAndDelete(id);
-    if (!doc) return res.status(404).json({ error: 'Invoice not found' });
-    return res.status(200).json({ message: 'Invoice deleted successfully' });
+    return res.status(201).json({ ...req.body, _id: `inv_${Date.now()}`, createdAt: new Date().toISOString() });
   }
   
   return res.status(405).end();

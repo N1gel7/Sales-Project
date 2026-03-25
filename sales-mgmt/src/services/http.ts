@@ -30,28 +30,6 @@ export async function http<T = unknown>(path: string, options: { method?: HttpMe
   return (await res.text()) as T;
 }
 
-export function decodeJwt<T = any>(token: string): T | null {
-  try {
-    // Handle our simple base64 encoded token
-    const json = atob(token);
-    const payload = JSON.parse(json);
-    
-    // Check if token is expired
-    if (payload.exp && payload.exp < Date.now()) {
-      return null;
-    }
-    
-    return payload;
-  } catch {
-    // Fallback to standard JWT decoding
-    try {
-      const [, payload] = token.split('.');
-      const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
-      return JSON.parse(decodeURIComponent(escape(json)));
-    } catch {
-      return null;
-    }
-  }
-}
+// JWT decoding removed for simpler role-based access.
 
 

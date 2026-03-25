@@ -202,6 +202,18 @@ export default function Uploads(): React.ReactElement {
                       )}
                     </div>
                   )}
+                  {upload.transcription && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
+                      <div className="font-semibold text-blue-800">Transcription:</div>
+                      <p className="italic">"{upload.transcription}"</p>
+                      {upload.translation && (
+                        <>
+                          <div className="font-semibold text-blue-800 mt-1">Translation:</div>
+                          <p className="italic">"{upload.translation}"</p>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500 ml-4">{new Date(upload.createdAt).toLocaleString()}</div>
               </li>

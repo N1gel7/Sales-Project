@@ -46,6 +46,7 @@ type DashboardStats = {
 };
 
 type Activity = {
+  _id?: string;
   type: 'task' | 'invoice' | 'upload';
   action: string;
   user: string;
@@ -58,10 +59,22 @@ export default function Dashboard(): React.ReactElement {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
+
+  useEffect(() => {
+    const userInfo = localStorage.getItem('user_info');
+    if (userInfo) {
+      try {
+        setRole(JSON.parse(userInfo).role);
+      } catch (e) {
+        console.error('Failed to parse user info', e);
+      }
+    }
+  }, []);
 
   async function loadDashboard() {
     // Check if user is authenticated
@@ -234,29 +247,31 @@ export default function Dashboard(): React.ReactElement {
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="card card-hover card-gradient">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {formatCurrency(stats?.salesStats?.totalRevenue || 0)}
+        {(role === 'admin' || role === 'manager') && (
+          <div className="card card-hover card-gradient">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
+                  <p className="text-3xl font-bold text-green-600">
+                    {formatCurrency(stats?.salesStats?.totalRevenue || 0)}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                  <DollarSign className="h-6 w-6 text-green-600" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {stats?.salesStats?.totalInvoices || 0} invoices
                 </p>
+                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                  +12%
+                </span>
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <DollarSign className="h-6 w-6 text-green-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                {stats?.salesStats?.totalInvoices || 0} invoices
-              </p>
-              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                +12%
-              </span>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="card card-hover">
           <div className="card-body">
@@ -282,53 +297,57 @@ export default function Dashboard(): React.ReactElement {
           </div>
         </div>
 
-        <div className="card card-hover">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Active Team</p>
-                <p className="text-3xl font-bold text-purple-600">
-                  {stats?.employeeActivity?.length || 0}
+        {(role === 'admin' || role === 'manager') && (
+          <div className="card card-hover">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Active Team</p>
+                  <p className="text-3xl font-bold text-purple-600">
+                    {stats?.employeeActivity?.length || 0}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <Users className="h-6 w-6 text-purple-600" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  members active
                 </p>
+                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
+                  Online
+                </span>
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                <Users className="h-6 w-6 text-purple-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                members active
-              </p>
-              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                Online
-              </span>
             </div>
           </div>
-        </div>
+        )}
 
-        <div className="card card-hover">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Avg Invoice</p>
-                <p className="text-3xl font-bold text-orange-600">
-                  {formatCurrency(stats?.salesStats?.averageInvoice || 0)}
+        {(role === 'admin' || role === 'manager') && (
+          <div className="card card-hover">
+            <div className="card-body">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Avg Invoice</p>
+                  <p className="text-3xl font-bold text-orange-600">
+                    {formatCurrency(stats?.salesStats?.averageInvoice || 0)}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                  <BarChart3 className="h-6 w-6 text-orange-600" />
+                </div>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  per transaction
                 </p>
+                <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                  Avg
+                </span>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                <BarChart3 className="h-6 w-6 text-orange-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                per transaction
-              </p>
-              <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                Avg
-              </span>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -352,60 +371,64 @@ export default function Dashboard(): React.ReactElement {
         </div>
 
         {/* Top Performers */}
-        <div className="card">
-          <div className="card-header">Top Performers</div>
-          <div className="card-body">
-            <div className="space-y-3">
-              {stats?.employeeActivity?.slice(0, 5).map((employee, index) => (
-                <div key={employee._id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
-                      {index + 1}
+        {(role === 'admin' || role === 'manager') && (
+          <div className="card">
+            <div className="card-header">Top Performers</div>
+            <div className="card-body">
+              <div className="space-y-3">
+                {stats?.employeeActivity?.slice(0, 5).map((employee, index) => (
+                  <div key={employee._id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium">{employee.name}</p>
+                        <p className="text-xs text-gray-500">{employee.code}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{employee.name}</p>
-                      <p className="text-xs text-gray-500">{employee.code}</p>
-                    </div>
+                    <span className="font-semibold text-green-600">
+                      {employee.completedTasks} tasks
+                    </span>
                   </div>
-                  <span className="font-semibold text-green-600">
-                    {employee.completedTasks} tasks
-                  </span>
-                </div>
-              ))}
-              {(!stats?.employeeActivity || stats.employeeActivity.length === 0) && (
-                <p className="text-gray-500 text-center py-4">No activity data available</p>
-              )}
+                ))}
+                {(!stats?.employeeActivity || stats.employeeActivity.length === 0) && (
+                  <p className="text-gray-500 text-center py-4">No activity data available</p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Product Performance */}
-        <div className="card">
-          <div className="card-header">Top Products</div>
-          <div className="card-body">
-            <div className="space-y-3">
-              {stats?.productPerformance?.slice(0, 5).map((product) => (
-                <div key={product._id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Package className="h-4 w-4 text-gray-400" />
-                    <div>
-                      <p className="font-medium">{product._id}</p>
-                      <p className="text-xs text-gray-500">{product.count} sales</p>
+        {(role === 'admin' || role === 'manager') && (
+          <div className="card">
+            <div className="card-header">Top Products</div>
+            <div className="card-body">
+              <div className="space-y-3">
+                {stats?.productPerformance?.slice(0, 5).map((product) => (
+                  <div key={product._id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Package className="h-4 w-4 text-gray-400" />
+                      <div>
+                        <p className="font-medium">{product._id}</p>
+                        <p className="text-xs text-gray-500">{product.count} sales</p>
+                      </div>
                     </div>
+                    <span className="font-semibold text-green-600">
+                      {formatCurrency(product.revenue)}
+                    </span>
                   </div>
-                  <span className="font-semibold text-green-600">
-                    {formatCurrency(product.revenue)}
-                  </span>
-                </div>
-              ))}
-              {(!stats?.productPerformance || stats.productPerformance.length === 0) && (
-                <p className="text-gray-500 text-center py-4">No product data available</p>
-              )}
+                ))}
+                {(!stats?.productPerformance || stats.productPerformance.length === 0) && (
+                  <p className="text-gray-500 text-center py-4">No product data available</p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Location Activity */}
         <div className="card">
@@ -439,76 +462,80 @@ export default function Dashboard(): React.ReactElement {
       </div>
 
       {/* Daily Sales Trend */}
-      <div className="card">
-        <div className="card-header">Sales Trend (Last 7 Days)</div>
-        <div className="card-body">
-          {stats?.dailySales && stats.dailySales.length > 0 ? (
-            <div className="space-y-4">
-              {stats?.dailySales?.map((day) => (
-                <div key={`${day._id.year}-${day._id.month}-${day._id.day}`} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
-                      {day._id.day}
+      {(role === 'admin') && (
+        <div className="card">
+          <div className="card-header">Sales Trend (Last 7 Days)</div>
+          <div className="card-body">
+            {stats?.dailySales && stats.dailySales.length > 0 ? (
+              <div className="space-y-4">
+                {stats?.dailySales?.map((day) => (
+                  <div key={`${day._id.year}-${day._id.month}-${day._id.day}`} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
+                        {day._id.day}
+                      </div>
+                      <div>
+                        <p className="font-medium">
+                          {new Date(day._id.year, day._id.month - 1, day._id.day).toLocaleDateString()}
+                        </p>
+                        <p className="text-xs text-gray-500">{day.count} invoices</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">
-                        {new Date(day._id.year, day._id.month - 1, day._id.day).toLocaleDateString()}
+                    <div className="text-right">
+                      <p className="font-semibold text-green-600">
+                        {formatCurrency(day.revenue)}
                       </p>
-                      <p className="text-xs text-gray-500">{day.count} invoices</p>
+                      <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
+                        <div 
+                          className="bg-green-500 h-2 rounded-full" 
+                          style={{ 
+                            width: `${Math.min(100, (day.revenue / Math.max(...(stats?.dailySales?.map(d => d.revenue) || [1]))) * 100)}%` 
+                          }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-green-600">
-                      {formatCurrency(day.revenue)}
-                    </p>
-                    <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
-                      <div 
-                        className="bg-green-500 h-2 rounded-full" 
-                        style={{ 
-                          width: `${Math.min(100, (day.revenue / Math.max(...(stats?.dailySales?.map(d => d.revenue) || [1]))) * 100)}%` 
-                        }}
-                      ></div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-8">No sales data for the selected period</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Activity */}
+      {(role === 'admin' || role === 'manager') && (
+        <div className="card">
+          <div className="card-header">Recent Activity</div>
+          <div className="card-body">
+            <div className="space-y-3">
+              {activities.map((activity) => (
+                <div key={activity._id || activity.timestamp} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                    {activity.type === 'task' && <CheckCircle className="h-4 w-4 text-blue-600" />}
+                    {activity.type === 'invoice' && <DollarSign className="h-4 w-4 text-green-600" />}
+                    {activity.type === 'upload' && <Activity className="h-4 w-4 text-purple-600" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium">{activity.action}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-500">{activity.user}</span>
+                      <span className="text-xs text-gray-400">•</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 </div>
               ))}
+              {activities.length === 0 && (
+                <p className="text-gray-500 text-center py-8">No recent activity</p>
+              )}
             </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8">No sales data for the selected period</p>
-          )}
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="card">
-        <div className="card-header">Recent Activity</div>
-        <div className="card-body">
-          <div className="space-y-3">
-            {activities.map((activity) => (
-              <div key={activity.timestamp} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                  {activity.type === 'task' && <CheckCircle className="h-4 w-4 text-blue-600" />}
-                  {activity.type === 'invoice' && <DollarSign className="h-4 w-4 text-green-600" />}
-                  {activity.type === 'upload' && <Activity className="h-4 w-4 text-purple-600" />}
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">{activity.action}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-500">{activity.user}</span>
-                    <span className="text-xs text-gray-400">•</span>
-                    <span className="text-xs text-gray-500">
-                      {new Date(activity.timestamp).toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {activities.length === 0 && (
-              <p className="text-gray-500 text-center py-8">No recent activity</p>
-            )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
