@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withAuth } from './_lib/authMiddleware.js';
+
+async function handler(req, res) {
   const { type } = req.query || req.body || {};
   
   if (type === 'notifications') return res.json([]);
@@ -15,3 +17,6 @@ export default async function handler(req, res) {
 
   return res.status(200).json({ status: 'ok', message: 'General mock handler' });
 }
+
+
+export default withAuth(handler);

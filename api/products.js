@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withAuth } from './_lib/authMiddleware.js';
+
+async function handler(req, res) {
   const mockProducts = [
     { _id: 'prod_1', name: 'Smartphone X', price: 999.99, category: 'Electronics', createdAt: new Date().toISOString() },
     { _id: 'prod_2', name: 'Laptop Pro', price: 1499.99, category: 'Electronics', createdAt: new Date().toISOString() },
@@ -23,3 +25,6 @@ export default async function handler(req, res) {
   
   return res.status(405).end();
 }
+
+
+export default withAuth(handler);

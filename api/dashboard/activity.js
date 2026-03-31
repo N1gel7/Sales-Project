@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withAuth } from '../_lib/authMiddleware.js';
+
+async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
   
   const activities = [
@@ -10,3 +12,6 @@ export default async function handler(req, res) {
   
   return res.json(activities);
 }
+
+
+export default withAuth(handler);

@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withAuth } from './_lib/authMiddleware.js';
+
+async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
   
   const mockUsers = [
@@ -9,3 +11,6 @@ export default async function handler(req, res) {
   
   return res.status(200).json(mockUsers);
 }
+
+
+export default withAuth(handler);

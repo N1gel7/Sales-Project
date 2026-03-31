@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withAuth } from './_lib/authMiddleware.js';
+
+async function handler(req, res) {
   const { method, url } = req;
   const urlParts = url.split('/');
   // /api/chats
@@ -56,3 +58,6 @@ export default async function handler(req, res) {
 
   return res.status(200).json([]);
 }
+
+
+export default withAuth(handler);

@@ -1,4 +1,6 @@
-export default async function handler(req, res) {
+import { withAuth } from './_lib/authMiddleware.js';
+
+async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -64,3 +66,6 @@ export default async function handler(req, res) {
     }
   });
 }
+
+
+export default withAuth(handler);
