@@ -101,8 +101,7 @@ Thumbs.db
 *.tmp
 *.temp
 
-# Local development server
-server.js
+
 
 # Vercel
 .vercel

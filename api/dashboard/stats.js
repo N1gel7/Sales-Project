@@ -1,69 +1,114 @@
+import { getDbPool } from '../_lib/db.js';
 import { withAuth } from '../_lib/authMiddleware.js';
 
 async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
-  // Hardcoded mock stats
-  const taskStats = {
-    pending: 12,
-    in_progress: 5,
-    completed: 28,
-    overdue: 3,
-    cancelled: 2
-  };
+  const pool = getDbPool();
 
-  const salesStats = {
-    totalRevenue: 45670.50,
-    totalInvoices: 154,
-    averageInvoice: 296.56
-  };
+  try {
+    // ── Task stats: count by status ──
+    const taskStatsRes = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'pending')     AS pending,
+        COUNT(*) FILTER (WHERE status = 'in_progress')  AS in_progress,
+        COUNT(*) FILTER (WHERE status = 'completed')    AS completed,
+        COUNT(*) FILTER (WHERE status = 'overdue')      AS overdue,
+        COUNT(*) FILTER (WHERE status = 'cancelled')    AS cancelled
+      FROM tasks
+    `);
+    const taskStats = taskStatsRes.rows[0] || { pending: 0, in_progress: 0, completed: 0, overdue: 0, cancelled: 0 };
+    // Convert string counts to numbers
+    Object.keys(taskStats).forEach(k => { taskStats[k] = Number(taskStats[k]); });
 
-  // Daily sales (last 7 days)
-  const end = new Date();
-  const dailySales = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(end.getTime() - i * 24 * 60 * 60 * 1000);
-    dailySales.push({
-      _id: {
-        year: date.getFullYear(),
-        month: date.getMonth() + 1,
-        day: date.getDate()
-      },
-      revenue: Math.floor(Math.random() * 5000) + 1000,
-      count: Math.floor(Math.random() * 20) + 5
+    // ── Sales stats: aggregate invoices ──
+    const salesStatsRes = await pool.query(`
+      SELECT
+        COALESCE(SUM(price), 0)   AS "totalRevenue",
+        COUNT(*)                  AS "totalInvoices",
+        COALESCE(AVG(price), 0)   AS "averageInvoice"
+      FROM invoices
+    `);
+    const salesStats = salesStatsRes.rows[0];
+    salesStats.totalRevenue = Number(salesStats.totalRevenue);
+    salesStats.totalInvoices = Number(salesStats.totalInvoices);
+    salesStats.averageInvoice = Number(Number(salesStats.averageInvoice).toFixed(2));
+
+    // ── Daily sales (last 7 days from invoices) ──
+    const dailySalesRes = await pool.query(`
+      SELECT
+        EXTRACT(YEAR  FROM created_at)::int AS year,
+        EXTRACT(MONTH FROM created_at)::int AS month,
+        EXTRACT(DAY   FROM created_at)::int AS day,
+        COALESCE(SUM(price), 0) AS revenue,
+        COUNT(*)                AS count
+      FROM invoices
+      WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+      GROUP BY year, month, day
+      ORDER BY year, month, day
+    `);
+    const dailySales = dailySalesRes.rows.map(r => ({
+      _id: { year: r.year, month: r.month, day: r.day },
+      revenue: Number(r.revenue),
+      count: Number(r.count)
+    }));
+
+    // ── Employee activity: completed tasks per user ──
+    const empRes = await pool.query(`
+      SELECT u.id AS "_id", u.name, u.code,
+             COUNT(t.id) AS "completedTasks"
+      FROM users u
+      LEFT JOIN tasks t ON t.assignee_id = u.id AND t.status = 'completed'
+      GROUP BY u.id, u.name, u.code
+      ORDER BY "completedTasks" DESC
+    `);
+    const employeeActivity = empRes.rows.map(r => ({
+      ...r, completedTasks: Number(r.completedTasks)
+    }));
+
+    // ── Product performance: revenue from invoices by product ──
+    const prodRes = await pool.query(`
+      SELECT product AS "_id",
+             COALESCE(SUM(price), 0) AS revenue,
+             COUNT(*) AS count
+      FROM invoices
+      GROUP BY product
+      ORDER BY revenue DESC
+      LIMIT 10
+    `);
+    const productPerformance = prodRes.rows.map(r => ({
+      ...r, revenue: Number(r.revenue), count: Number(r.count)
+    }));
+
+    // ── Location activity: from uploads with coordinates ──
+    const locRes = await pool.query(`
+      SELECT coords AS location, COUNT(*) AS count
+      FROM uploads
+      WHERE coords IS NOT NULL
+      GROUP BY coords
+      LIMIT 20
+    `);
+    const locationActivity = locRes.rows.map(r => ({
+      _id: r.location, count: Number(r.count), types: ['Upload']
+    }));
+
+    const end = new Date();
+    return res.status(200).json({
+      taskStats,
+      salesStats,
+      dailySales,
+      employeeActivity,
+      productPerformance,
+      locationActivity,
+      dateRange: {
+        start: new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+        end: end.toISOString()
+      }
     });
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    return res.status(500).json({ error: 'Failed to fetch dashboard stats' });
   }
-
-  const employeeActivity = [
-    { _id: 'user_admin', name: 'Admin User', code: 'ADM001', completedTasks: 25 },
-    { _id: 'user_manager', name: 'Manager User', code: 'MGR001', completedTasks: 18 },
-    { _id: 'user_rep1', name: 'Sales Rep', code: 'SAL001', completedTasks: 32 }
-  ];
-
-  const productPerformance = [
-    { _id: 'Smartphone X', revenue: 15000, count: 30 },
-    { _id: 'Laptop Pro', revenue: 25000, count: 10 },
-    { _id: 'Wireless Earbuds', revenue: 5000, count: 50 }
-  ];
-
-  const locationActivity = [
-    { _id: { lat: 5.6037, lng: -0.1870 }, count: 15, types: ['Sale', 'Visit'] },
-    { _id: { lat: 5.6342, lng: -0.2104 }, count: 8, types: ['Prospect'] }
-  ];
-
-  return res.status(200).json({
-    taskStats,
-    salesStats,
-    dailySales,
-    employeeActivity,
-    productPerformance,
-    locationActivity,
-    dateRange: { 
-      start: new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(), 
-      end: end.toISOString()
-    }
-  });
 }
-
 
 export default withAuth(handler);
