@@ -1,85 +1,53 @@
+import { getDbPool } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 
 async function handler(req, res) {
-  const { method, url } = req;
-  
-  const mockReports = [
-    {
-      _id: 'rep_1',
-      title: 'Monthly Sales Summary',
-      description: 'Overview of sales performance for March 2026.',
-      type: 'sales_report',
-      author: { id: 'user_admin', name: 'Admin User', role: 'admin' },
-      attachments: [],
-      tags: ['sales', 'monthly'],
-      status: 'published',
-      visibility: 'team',
-      comments: [],
-      likes: [],
-      createdAt: new Date(Date.now() - 172800000).toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: 'rep_2',
-      title: 'Store Layout Mood Board',
-      description: 'Inspiration for the new outlet in Kumasi.',
-      type: 'mood_board',
-      author: { id: 'user_rep1', name: 'Sales Rep', role: 'sales' },
-      attachments: [
-        { filename: 'inspiration.jpg', url: 'https://images.unsplash.com/photo-1534452203293-497d1ad262c2?w=400&h=400&fit=crop', type: 'image/jpeg', size: 1024 }
-      ],
-      tags: ['design', 'kumasi'],
-      status: 'published',
-      visibility: 'team',
-      comments: [
-        { _id: 'comm_1', author: { id: 'user_admin', name: 'Admin User' }, content: 'Looks great!', createdAt: new Date().toISOString() }
-      ],
-      likes: [{ user: 'user_admin', likedAt: new Date().toISOString() }],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: 'rep_3',
-      title: 'Q1 Market Analysis',
-      description: 'Competitor pricing and market share analysis.',
-      type: 'summary_report',
-      author: { id: 'user_manager', name: 'Manager User', role: 'manager' },
-      attachments: [],
-      tags: ['market', 'analysis'],
-      status: 'published',
-      visibility: 'team',
-      comments: [],
-      likes: [],
-      createdAt: new Date(Date.now() - 345600000).toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: 'rep_4',
-      title: 'Customer Feedback - March',
-      description: 'Aggregated feedback from field visits.',
-      type: 'client_feedback',
-      author: { id: 'user_rep1', name: 'Sales Rep', role: 'sales' },
-      attachments: [],
-      tags: ['feedback', 'client'],
-      status: 'published',
-      visibility: 'team',
-      comments: [],
-      likes: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+  const pool = getDbPool();
+  const { method } = req;
+
+  try {
+    // ── GET: List reports with author info ──
+    if (method === 'GET') {
+      const result = await pool.query(
+        `SELECT r.id AS "_id", r.title, r.description, r.type, r.attachments,
+                r.tags, r.status, r.visibility, r.comments, r.likes,
+                r.created_at AS "createdAt", r.updated_at AS "updatedAt",
+                json_build_object('id', u.id, 'name', u.name, 'role', u.role) AS author
+         FROM reports r
+         LEFT JOIN users u ON r.author_id = u.id
+         ORDER BY r.created_at DESC`
+      );
+      return res.status(200).json(result.rows);
     }
-  ];
 
-  if (method === 'GET') {
-    return res.status(200).json(mockReports);
+    // ── POST: Create a report ──
+    if (method === 'POST') {
+      let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const { title, description, type, attachments, tags, status, visibility } = body || {};
+
+      if (!title) return res.status(400).json({ error: 'Report title is required' });
+
+      const result = await pool.query(
+        `INSERT INTO reports (title, description, type, author_id, attachments, tags, status, visibility)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id AS "_id", title, description, type, attachments, tags, status, visibility,
+                   comments, likes, created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [title, description || null, type || 'sales_report', req.user?.id || null,
+         attachments ? JSON.stringify(attachments) : '[]',
+         tags || '{}', status || 'draft', visibility || 'team']
+      );
+
+      const report = result.rows[0];
+      report.author = { id: req.user?.id, name: req.user?.name, role: req.user?.role };
+
+      return res.status(201).json(report);
+    }
+
+    return res.status(200).json([]);
+  } catch (error) {
+    console.error('Reports error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
-
-  if (method === 'POST') {
-    return res.status(201).json({ ...req.body, _id: `rep_${Date.now()}`, author: { id: 'user_rep1', name: 'Sales Rep' }, createdAt: new Date().toISOString() });
-  }
-
-  return res.status(200).json([]);
 }
-
 
 export default withAuth(handler);

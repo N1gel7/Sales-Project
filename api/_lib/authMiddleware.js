@@ -17,13 +17,19 @@ export function withAuth(handler) {
         return handler(req, res);
       }
 
-      // 1. Get auth header
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
+      // 1. Get auth token (checking cookies first, fallback to header)
+      let token = req.cookies?.authToken;
+
+      if (!token) {
+        const authHeader = req.headers['authorization'] || req.headers.authorization;
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          token = authHeader.split(' ')[1];
+        }
       }
 
-      const token = authHeader.split(' ')[1];
+      if (!token) {
+        return res.status(401).json({ error: 'Unauthorized: Access token is required' });
+      }
 
       // 2. Verify Token
       const decodedUser = jwt.verify(token, JWT_SECRET);
@@ -40,5 +46,29 @@ export function withAuth(handler) {
       }
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
+  };
+}
+
+/**
+ * Role-Based Access Control (RBAC) middleware.
+ * Wraps a handler with withAuth AND checks the user's role.
+ * 
+ * Usage:
+ *   export default withRole('admin', 'manager')(handler);
+ * 
+ * @param  {...string} allowedRoles - Roles permitted to access this endpoint
+ * @returns {Function} - A function that wraps the handler
+ */
+export function withRole(...allowedRoles) {
+  return (handler) => {
+    return withAuth(async (req, res) => {
+      const userRole = req.user?.role;
+      if (!userRole || !allowedRoles.includes(userRole)) {
+        return res.status(403).json({ 
+          error: 'Forbidden: You do not have permission to access this resource' 
+        });
+      }
+      return handler(req, res);
+    });
   };
 }
