@@ -1,12 +1,11 @@
-import { getDbPool } from './_lib/db.js';
+import { supabase } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 
 /**
  * General purpose router — the frontend calls this with ?type= to reach
- * different resources. This delegates to real PostgreSQL queries.
+ * different resources. This delegates to Supabase JS queries.
  */
 async function handler(req, res) {
-  const pool = getDbPool();
   const { method } = req;
   const type = req.query?.type || '';
   const chatId = req.query?.chatId;
@@ -15,20 +14,20 @@ async function handler(req, res) {
     // ── Notifications ──
     if (type === 'notifications') {
       if (method === 'GET') {
-        const result = await pool.query(
-          `SELECT id AS "_id", type, title, message, ref_id AS "refId", ref_type AS "refType",
-                  read, created_at AS "createdAt"
-           FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
-          [req.user?.id]
-        );
-        return res.json(result.rows);
+        const { data, error } = await supabase.from('notifications')
+          .select('*').eq('user_id', req.user?.id).order('created_at', { ascending: false }).limit(50);
+        if (error) throw error;
+        const formatted = data.map(n => ({
+          _id: n.id, type: n.type, title: n.title, message: n.message, refId: n.ref_id, refType: n.ref_type,
+          read: n.read, createdAt: n.created_at
+        }));
+        return res.json(formatted);
       }
       if (method === 'PATCH') {
         let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const notifId = body?.notificationId || body?.id;
         if (notifId) {
-          await pool.query('UPDATE notifications SET read = true WHERE id = $1 AND user_id = $2',
-            [notifId, req.user?.id]);
+          await supabase.from('notifications').update({ read: true }).eq('id', notifId).eq('user_id', req.user?.id);
         }
         return res.json({ message: 'Notification updated' });
       }
@@ -38,28 +37,32 @@ async function handler(req, res) {
     // ── Uploads ──
     if (type === 'uploads') {
       if (method === 'GET') {
-        const result = await pool.query(
-          `SELECT u.id AS "_id", u.filename, u.type, u.note, u.file_url AS "fileUrl",
-                  u.transcription, u.translation, u.coords, u.created_at AS "createdAt",
-                  json_build_object('code', usr.code, 'name', usr.name) AS "user"
-           FROM uploads u LEFT JOIN users usr ON u.user_id = usr.id
-           ORDER BY u.created_at DESC`
-        );
-        return res.json(result.rows);
+        const { data: uploads, error: uErr } = await supabase.from('uploads').select('*').order('created_at', { ascending: false });
+        if (uErr) throw uErr;
+        const { data: users } = await supabase.from('users').select('id, name, code');
+        const userMap = {};
+        (users||[]).forEach(u => userMap[u.id] = u);
+
+        const formatted = uploads.map(u => ({
+          _id: u.id, filename: u.filename, type: u.type, note: u.note, fileUrl: u.file_url,
+          transcription: u.transcription, translation: u.translation, coords: typeof u.coords === 'string' ? JSON.parse(u.coords) : u.coords, 
+          createdAt: u.created_at, user: u.user_id ? { name: userMap[u.user_id]?.name, code: userMap[u.user_id]?.code } : null
+        }));
+        return res.json(formatted);
       }
       if (method === 'POST') {
-        // For file uploads, the body may come as FormData (handled by multer upstream).
-        // This is a fallback JSON handler.
         let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const { filename, type: ftype, note, fileUrl, file_url, transcription, translation, coords } = body || {};
-        const result = await pool.query(
-          `INSERT INTO uploads (filename, type, note, file_url, transcription, translation, coords, user_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING id AS "_id", filename, type, note, file_url AS "fileUrl", created_at AS "createdAt"`,
-          [filename || 'untitled', ftype || null, note || null, fileUrl || file_url || null,
-           transcription || null, translation || null, coords ? JSON.stringify(coords) : null, req.user?.id]
-        );
-        return res.status(201).json(result.rows[0]);
+        
+        const { data: u, error } = await supabase.from('uploads').insert([{
+          filename: filename || 'untitled', type: ftype || null, note: note || null, file_url: fileUrl || file_url || null,
+          transcription: transcription || null, translation: translation || null, coords: coords || null, user_id: req.user?.id
+        }]).select('*').single();
+        if (error) throw error;
+        
+        return res.status(201).json({
+          _id: u.id, filename: u.filename, type: u.type, note: u.note, fileUrl: u.file_url, createdAt: u.created_at
+        });
       }
       return res.json([]);
     }
@@ -67,25 +70,31 @@ async function handler(req, res) {
     // ── Chats ──
     if (type === 'chats') {
       if (method === 'GET') {
-        const result = await pool.query(
-          `SELECT c.id AS "_id", c.name, c.type, c.participants, c.is_active AS "isActive",
-                  c.last_message AS "lastMessage", c.created_at AS "createdAt",
-                  json_build_object('_id', u.id, 'name', u.name, 'role', u.role) AS "createdBy"
-           FROM chats c LEFT JOIN users u ON c.created_by = u.id
-           ORDER BY c.updated_at DESC`
-        );
-        return res.json(result.rows);
+        const { data: chats, error: cErr } = await supabase.from('chats').select('*').order('updated_at', { ascending: false });
+        if (cErr) throw cErr;
+        const { data: users } = await supabase.from('users').select('id, name, role');
+        const userMap = {};
+        (users||[]).forEach(u => userMap[u.id] = u);
+
+        const formatted = chats.map(c => ({
+          _id: c.id, name: c.name, type: c.type, participants: c.participants, isActive: c.is_active,
+          lastMessage: c.last_message, createdAt: c.created_at,
+          createdBy: c.created_by ? { _id: c.created_by, name: userMap[c.created_by]?.name, role: userMap[c.created_by]?.role } : null
+        }));
+        return res.json(formatted);
       }
       if (method === 'POST') {
         let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const { name, type: ctype, participants } = body || {};
-        const result = await pool.query(
-          `INSERT INTO chats (name, type, created_by, participants)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id AS "_id", name, type, participants, is_active AS "isActive", created_at AS "createdAt"`,
-          [name || 'New Chat', ctype || 'group', req.user?.id, participants ? JSON.stringify(participants) : '[]']
-        );
-        return res.status(201).json(result.rows[0]);
+        
+        const { data: c, error } = await supabase.from('chats').insert([{
+          name: name || 'New Chat', type: ctype || 'group', created_by: req.user?.id, participants: participants || []
+        }]).select('*').single();
+        if (error) throw error;
+        
+        return res.status(201).json({
+          _id: c.id, name: c.name, type: c.type, participants: c.participants, isActive: c.is_active, createdAt: c.created_at
+        });
       }
       return res.json([]);
     }
@@ -93,39 +102,44 @@ async function handler(req, res) {
     // ── Chat Messages ──
     if (type === 'chat-messages' && chatId) {
       if (method === 'GET') {
-        const result = await pool.query(
-          `SELECT m.id AS "_id", m.content, m.type, m.read_by AS "readBy", m.created_at AS "createdAt",
-                  json_build_object('id', u.id, 'name', u.name, 'role', u.role) AS sender
-           FROM messages m LEFT JOIN users u ON m.sender_id = u.id
-           WHERE m.chat_id = $1 ORDER BY m.created_at ASC`,
-          [chatId]
-        );
-        return res.json(result.rows);
+        const { data: messages, error: mErr } = await supabase.from('messages').select('*').eq('chat_id', chatId).order('created_at', { ascending: true });
+        if (mErr) throw mErr;
+        const { data: users } = await supabase.from('users').select('id, name, role');
+        const userMap = {};
+        (users||[]).forEach(u => userMap[u.id] = u);
+
+        const formatted = messages.map(m => ({
+          _id: m.id, content: m.content, type: m.type, readBy: m.read_by, createdAt: m.created_at,
+          sender: m.sender_id ? { id: m.sender_id, name: userMap[m.sender_id]?.name, role: userMap[m.sender_id]?.role } : null
+        }));
+        return res.json(formatted);
       }
       if (method === 'POST') {
         let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const { content, type: mtype } = body || {};
-        const result = await pool.query(
-          `INSERT INTO messages (chat_id, sender_id, content, type)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id AS "_id", content, type, read_by AS "readBy", created_at AS "createdAt"`,
-          [chatId, req.user?.id, content || '', mtype || 'text']
-        );
-        const msg = result.rows[0];
-        msg.sender = { id: req.user?.id, name: req.user?.name, role: req.user?.role };
-        // Update last_message on the chat
-        await pool.query(
-          `UPDATE chats SET last_message = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-          [JSON.stringify({ content, sender: msg.sender, sentAt: msg.createdAt }), chatId]
-        );
-        return res.status(201).json(msg);
+        
+        const { data: m, error } = await supabase.from('messages').insert([{
+          chat_id: chatId, sender_id: req.user?.id, content: content || '', type: mtype || 'text'
+        }]).select('*').single();
+        if (error) throw error;
+        
+        const senderInfo = { id: req.user?.id, name: req.user?.name, role: req.user?.role };
+        await supabase.from('chats').update({
+          last_message: { content, sender: senderInfo, sentAt: m.created_at },
+          updated_at: new Date().toISOString()
+        }).eq('id', chatId);
+
+        return res.status(201).json({
+           _id: m.id, content: m.content, type: m.type, readBy: m.read_by, createdAt: m.created_at, sender: senderInfo
+        });
       }
       if (method === 'PUT') {
-        // Mark messages as read
-        await pool.query(
-          `UPDATE messages SET read_by = read_by || $1::jsonb WHERE chat_id = $2`,
-          [JSON.stringify([{ user: req.user?.id, readAt: new Date().toISOString() }]), chatId]
-        );
+        const { data: currentMessageRows } = await supabase.from('messages').select('id, read_by').eq('chat_id', chatId);
+        for (let m of currentMessageRows || []) {
+           let reads = m.read_by || [];
+           reads.push({ user: req.user?.id, readAt: new Date().toISOString() });
+           await supabase.from('messages').update({ read_by: reads }).eq('id', m.id);
+        }
         return res.json({ message: 'Messages marked as read' });
       }
       return res.json([]);
@@ -134,30 +148,38 @@ async function handler(req, res) {
     // ── Reports ──
     if (type === 'reports') {
       if (method === 'GET') {
-        const result = await pool.query(
-          `SELECT r.id AS "_id", r.title, r.description, r.type, r.attachments,
-                  r.tags, r.status, r.visibility, r.comments, r.likes,
-                  r.created_at AS "createdAt", r.updated_at AS "updatedAt",
-                  json_build_object('id', u.id, 'name', u.name, 'role', u.role) AS author
-           FROM reports r LEFT JOIN users u ON r.author_id = u.id
-           ORDER BY r.created_at DESC`
-        );
-        return res.json(result.rows);
+        const { data: reports, error: rErr } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
+        if (rErr) throw rErr;
+        const { data: users } = await supabase.from('users').select('id, name, role');
+        const userMap = {};
+        (users||[]).forEach(u => userMap[u.id] = u);
+
+        const formatted = reports.map(r => ({
+          _id: r.id, title: r.title, description: r.description, type: r.type,
+          attachments: typeof r.attachments === 'string' ? JSON.parse(r.attachments) : r.attachments,
+          tags: r.tags, status: r.status, visibility: r.visibility, comments: r.comments, likes: r.likes,
+          createdAt: r.created_at, updatedAt: r.updated_at,
+          author: r.author_id ? { id: r.author_id, name: userMap[r.author_id]?.name, role: userMap[r.author_id]?.role } : null
+        }));
+        return res.json(formatted);
       }
       if (method === 'POST') {
         let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const { title, description, type: rtype, attachments, tags, status, visibility } = body || {};
-        const result = await pool.query(
-          `INSERT INTO reports (title, description, type, author_id, attachments, tags, status, visibility)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING id AS "_id", title, description, type, attachments, tags, status, visibility,
-                     comments, likes, created_at AS "createdAt", updated_at AS "updatedAt"`,
-          [title || 'Untitled', description || null, rtype || 'sales_report', req.user?.id,
-           attachments ? JSON.stringify(attachments) : '[]', tags || '{}', status || 'draft', visibility || 'team']
-        );
-        const report = result.rows[0];
-        report.author = { id: req.user?.id, name: req.user?.name, role: req.user?.role };
-        return res.status(201).json(report);
+        
+        const { data: r, error } = await supabase.from('reports').insert([{
+          title: title || 'Untitled', description: description || null, type: rtype || 'sales_report', author_id: req.user?.id,
+          attachments: attachments ? JSON.stringify(attachments) : '[]', tags: tags || '{}', status: status || 'draft', visibility: visibility || 'team'
+        }]).select('*').single();
+        if (error) throw error;
+        
+        return res.status(201).json({
+          _id: r.id, title: r.title, description: r.description, type: r.type,
+          attachments: typeof r.attachments === 'string' ? JSON.parse(r.attachments) : r.attachments,
+          tags: r.tags, status: r.status, visibility: r.visibility, comments: r.comments, likes: r.likes,
+          createdAt: r.created_at, updatedAt: r.updated_at,
+          author: { id: req.user?.id, name: req.user?.name, role: req.user?.role }
+        });
       }
       return res.json([]);
     }

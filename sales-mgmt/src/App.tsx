@@ -1,19 +1,20 @@
 import React, { useState } from 'react';
 import { NavLink, Route, Routes, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Package, 
-  ClipboardList, 
-  Upload, 
-  FileText, 
-  Map, 
-  ListTree, 
-  MessageCircle, 
+import {
+  LayoutDashboard,
+  Package,
+  ClipboardList,
+  Upload,
+  FileText,
+  Map,
+  ListTree,
+  MessageCircle,
   FileText as ReportIcon,
   Menu,
   X,
   LogOut,
   User,
+  Users as UsersIcon,
   Settings,
   Bell,
   Search,
@@ -31,6 +32,8 @@ import Categories from './pages/Categories';
 import Invoices from './pages/Invoices';
 import Chat from './pages/Chat';
 import Reports from './pages/Reports';
+import Users from './pages/Users.tsx';
+
 // Removed JWT decoding for simplified auth
 
 function useUser() {
@@ -60,13 +63,13 @@ function UserInfo() {
   const user = useUser();
   const [showDropdown, setShowDropdown] = useState(false);
   if (!user) return null;
-  
+
   const roleColors = {
     admin: 'bg-red-100 text-red-800 border-red-200',
-    manager: 'bg-blue-100 text-blue-800 border-blue-200', 
+    manager: 'bg-blue-100 text-blue-800 border-blue-200',
     sales: 'bg-green-100 text-green-800 border-green-200'
   };
-  
+
   return (
     <div className="relative">
       <button
@@ -82,7 +85,7 @@ function UserInfo() {
         </div>
         <ChevronDown className="h-4 w-4 text-gray-400" />
       </button>
-      
+
       {showDropdown && (
         <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
           <div className="px-4 py-3 border-b border-gray-100">
@@ -123,8 +126,8 @@ function LogoutButton() {
     navigate('/login');
   }
   return (
-    <button 
-      onClick={logout} 
+    <button
+      onClick={logout}
       className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
     >
       <LogOut className="h-4 w-4" />
@@ -172,6 +175,9 @@ function App(): React.ReactElement {
                 </div>
                 <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                   <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" />
+                  {role === 'admin' && (
+                    <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" />
+                  )}
                   {(role === 'admin' || role === 'manager') && (
                     <>
                       <SideLink to="/products" icon={<Package size={20} />} label="Products" />
@@ -218,6 +224,9 @@ function App(): React.ReactElement {
             </div>
             <nav className="flex-1 p-4 space-y-2">
               <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" />
+              {role === 'admin' && (
+                <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" />
+              )}
               {(role === 'admin' || role === 'manager') && (
                 <>
                   <SideLink to="/products" icon={<Package size={20} />} label="Products" />
@@ -237,7 +246,7 @@ function App(): React.ReactElement {
               <SideLink to="/map" icon={<Map size={20} />} label="Map" />
             </nav>
             <div className="p-4 border-t border-gray-100 bg-gray-50">
-              
+
               <div className="flex items-center justify-between">
                 <UserInfo />
                 <LogoutButton />
@@ -273,9 +282,9 @@ function App(): React.ReactElement {
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <Search className="h-4 w-4 text-gray-400" />
                     </div>
-                    <input 
-                      className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors" 
-                      placeholder="Search products, people..." 
+                    <input
+                      className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                      placeholder="Search products, people..."
                     />
                   </div>
 
@@ -299,14 +308,15 @@ function App(): React.ReactElement {
           <main className="flex-1 p-4 sm:p-6 lg:p-8">
             <Routes>
               <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-              <Route path="/products" element={<RequireAuth roles={["admin","manager","sales"]}><Products /></RequireAuth>} />
-              <Route path="/categories" element={<RequireAuth roles={["admin","manager","sales"]}><Categories /></RequireAuth>} />
-              <Route path="/tasks" element={<RequireAuth roles={["sales","manager","admin"]}><Tasks /></RequireAuth>} />
-              <Route path="/uploads" element={<RequireAuth roles={["sales","manager","admin"]}><Uploads /></RequireAuth>} />
-              <Route path="/billing" element={<RequireAuth roles={["sales","manager","admin"]}><Billing /></RequireAuth>} />
-              <Route path="/invoices" element={<RequireAuth roles={["sales","manager","admin"]}><Invoices /></RequireAuth>} />
-              <Route path="/chat" element={<RequireAuth roles={["sales","manager","admin"]}><Chat /></RequireAuth>} />
-              <Route path="/reports" element={<RequireAuth roles={["sales","manager","admin"]}><Reports /></RequireAuth>} />
+              <Route path="/products" element={<RequireAuth roles={["admin", "manager", "sales"]}><Products /></RequireAuth>} />
+              <Route path="/categories" element={<RequireAuth roles={["admin", "manager", "sales"]}><Categories /></RequireAuth>} />
+              <Route path="/tasks" element={<RequireAuth roles={["sales", "manager", "admin"]}><Tasks /></RequireAuth>} />
+              <Route path="/uploads" element={<RequireAuth roles={["sales", "manager", "admin"]}><Uploads /></RequireAuth>} />
+              <Route path="/billing" element={<RequireAuth roles={["sales", "manager", "admin"]}><Billing /></RequireAuth>} />
+              <Route path="/invoices" element={<RequireAuth roles={["sales", "manager", "admin"]}><Invoices /></RequireAuth>} />
+              <Route path="/chat" element={<RequireAuth roles={["sales", "manager", "admin"]}><Chat /></RequireAuth>} />
+              <Route path="/reports" element={<RequireAuth roles={["sales", "manager", "admin"]}><Reports /></RequireAuth>} />
+              <Route path="/users" element={<RequireAuth roles={["admin"]}><Users /></RequireAuth>} />
               <Route path="/map" element={<RequireAuth><MapViewSimple /></RequireAuth>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
@@ -322,19 +332,17 @@ function SideLink({ to, icon, label }: { to: string; icon: React.ReactNode; labe
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-          isActive 
-            ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25' 
-            : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 hover:shadow-sm'
+        `group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive
+          ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
+          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 hover:shadow-sm'
         }`
       }
       end={to === '/'}
     >
       {({ isActive }) => (
         <>
-          <span className={`transition-colors ${
-            isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
-          }`}>
+          <span className={`transition-colors ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
+            }`}>
             {icon}
           </span>
           <span className="truncate">{label}</span>

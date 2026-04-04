@@ -1,4 +1,4 @@
-import { http } from './http';
+import { http, axiosInstance } from './http';
 
 export type LoginResponse = { token: string; user: { id: string; name: string; email: string; role: string; code: string } };
 
@@ -92,9 +92,7 @@ export const api = {
   },
   // billing
   getInvoicePDF(id: string) {
-    return fetch(`/api/invoices/${id}/pdf`, {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-    });
+    return axiosInstance.get(`/api/invoices/${id}/pdf`, { responseType: 'blob' });
   },
   sendInvoiceEmail(id: string, body: { to: string; subject?: string; message?: string }) {
     return http(`/api/invoices/${id}/email`, { method: 'POST', body });
@@ -104,11 +102,7 @@ export const api = {
     return http('/api/general?type=uploads');
   },
   createUpload(formData: FormData) {
-    return fetch('/api/general?type=uploads', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` },
-      body: formData
-    });
+    return axiosInstance.post('/api/general?type=uploads', formData);
   },
   // chats
   listChats() {
@@ -134,11 +128,7 @@ export const api = {
     return http('/api/general?type=reports', { method: 'POST', body });
   },
   addReportAttachment(reportId: string, formData: FormData) {
-    return fetch(`/api/reports/${reportId}/attachments`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` },
-      body: formData
-    });
+    return axiosInstance.post(`/api/reports/${reportId}/attachments`, formData);
   },
   addReportComment(reportId: string, body: { content: string }) {
     return http(`/api/reports/${reportId}/comments`, { method: 'POST', body });

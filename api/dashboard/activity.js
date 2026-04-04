@@ -1,25 +1,43 @@
-import { getDbPool } from '../_lib/db.js';
+import { supabase } from '../_lib/db.js';
 import { withAuth } from '../_lib/authMiddleware.js';
 
 async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
-  const pool = getDbPool();
   const { limit } = req.query || {};
+  const queryLimit = Number(limit) || 20;
 
   try {
-    const result = await pool.query(
-      `SELECT al.id AS "_id", al.type, al.action, al.ref_id, al.ref_type, al.meta,
-              al.created_at AS "timestamp",
-              u.name AS "user"
-       FROM activity_logs al
-       LEFT JOIN users u ON al.actor_id = u.id
-       ORDER BY al.created_at DESC
-       LIMIT $1`,
-      [Number(limit) || 20]
-    );
+    const { data: logs, error: logsError } = await supabase
+      .from('activity_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(queryLimit);
 
-    return res.json(result.rows);
+    if (logsError) throw logsError;
+
+    // Fetch users for mapping
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('id, name');
+
+    if (usersError) throw usersError;
+
+    const userMap = {};
+    users.forEach(u => { userMap[u.id] = u.name; });
+
+    const formattedLogs = logs.map(al => ({
+      _id: al.id,
+      type: al.type,
+      action: al.action,
+      ref_id: al.ref_id,
+      ref_type: al.ref_type,
+      meta: al.meta,
+      timestamp: al.created_at,
+      user: userMap[al.actor_id] || 'Unknown'
+    }));
+
+    return res.json(formattedLogs);
   } catch (error) {
     console.error('Dashboard activity error:', error);
     return res.status(500).json({ error: 'Failed to fetch activity' });

@@ -1,4 +1,4 @@
-import supabase from './_lib/supabase.js';
+import { supabase } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 
 async function handler(req, res) {
@@ -9,29 +9,20 @@ async function handler(req, res) {
     if (method === 'GET') {
       const { q, category } = req.query || {};
       
-      let query = supabase
-        .from('products')
-        .select('id, name, price, category, details, attributes, created_at, updated_at')
-        .order('created_at', { ascending: false });
+      let query = supabase.from('products').select('*').order('created_at', { ascending: false });
 
-      if (q) {
-        query = query.ilike('name', `%${q}%`);
-      }
-      if (category) {
-        query = query.eq('category', category);
-      }
+      if (q) query = query.ilike('name', `%${q}%`);
+      if (category) query = query.eq('category', category);
 
       const { data, error } = await query;
       if (error) throw error;
 
-      const formattedData = data.map(item => ({
-        ...item,
-        _id: item.id,
-        createdAt: item.created_at,
-        updatedAt: item.updated_at
+      const formatted = data.map(p => ({
+        _id: p.id, name: p.name, price: p.price, category: p.category, details: p.details, attributes: p.attributes,
+        createdAt: p.created_at, updatedAt: p.updated_at
       }));
 
-      return res.status(200).json(formattedData);
+      return res.status(200).json(formatted);
     }
 
     // ── POST: Create product ──
@@ -41,25 +32,16 @@ async function handler(req, res) {
 
       if (!name) return res.status(400).json({ error: 'Product name is required' });
 
-      const { data, error } = await supabase
-        .from('products')
-        .insert([{
-          name,
-          price: price || 0,
-          category: category || null,
-          details: details || null,
-          attributes: attributes || {}
-        }])
-        .select('id, name, price, category, details, attributes, created_at')
-        .single();
+      const { data: p, error } = await supabase.from('products').insert([{
+        name, price: price || 0, category: category || null, details: details || null, attributes: attributes || {}
+      }]).select('*').single();
 
       if (error) throw error;
 
-      return res.status(201).json({
-        ...data,
-        _id: data.id,
-        createdAt: data.created_at
-      });
+      const formatted = {
+        _id: p.id, name: p.name, price: p.price, category: p.category, details: p.details, attributes: p.attributes, createdAt: p.created_at
+      };
+      return res.status(201).json(formatted);
     }
 
     // ── PATCH/PUT: Update product ──
@@ -77,23 +59,14 @@ async function handler(req, res) {
       if (details !== undefined) updates.details = details;
       if (attributes !== undefined) updates.attributes = attributes;
 
-      const { data, error } = await supabase
-        .from('products')
-        .update(updates)
-        .eq('id', prodId)
-        .select('id, name, price, category, details, attributes, updated_at')
-        .single();
+      const { data: p, error } = await supabase.from('products').update(updates).eq('id', prodId).select('*').single();
 
-      if (error) {
-        if (error.code === 'PGRST116') return res.status(404).json({ error: 'Product not found' });
-        throw error;
-      }
+      if (error) return res.status(404).json({ error: 'Product not found' });
 
-      return res.status(200).json({
-        ...data,
-        _id: data.id,
-        updatedAt: data.updated_at
-      });
+      const formatted = {
+        _id: p.id, name: p.name, price: p.price, category: p.category, details: p.details, attributes: p.attributes, updatedAt: p.updated_at
+      };
+      return res.status(200).json(formatted);
     }
 
     // ── DELETE ──
@@ -102,13 +75,8 @@ async function handler(req, res) {
       const prodId = body?._id || body?.id || req.query?.id;
       if (!prodId) return res.status(400).json({ error: 'Product ID is required' });
 
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', prodId);
-
+      const { error } = await supabase.from('products').delete().eq('id', prodId);
       if (error) throw error;
-      
       return res.status(200).json({ message: 'Product deleted' });
     }
 
