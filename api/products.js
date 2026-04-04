@@ -1,38 +1,28 @@
-import { getDbPool } from './_lib/db.js';
+import { supabase } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 
 async function handler(req, res) {
-  const pool = getDbPool();
   const { method } = req;
 
   try {
     // ── GET: List products (with optional search/category filter) ──
     if (method === 'GET') {
       const { q, category } = req.query || {};
-      let query = `
-        SELECT p.id AS "_id", p.name, p.price, p.category, p.details, p.attributes,
-               p.created_at AS "createdAt", p.updated_at AS "updatedAt"
-        FROM products p
-      `;
-      const params = [];
-      const conditions = [];
+      
+      let query = supabase.from('products').select('*').order('created_at', { ascending: false });
 
-      if (q) {
-        params.push(`%${q}%`);
-        conditions.push(`p.name ILIKE $${params.length}`);
-      }
-      if (category) {
-        params.push(category);
-        conditions.push(`p.category = $${params.length}`);
-      }
+      if (q) query = query.ilike('name', `%${q}%`);
+      if (category) query = query.eq('category', category);
 
-      if (conditions.length > 0) {
-        query += ' WHERE ' + conditions.join(' AND ');
-      }
-      query += ' ORDER BY p.created_at DESC';
+      const { data, error } = await query;
+      if (error) throw error;
 
-      const result = await pool.query(query, params);
-      return res.status(200).json(result.rows);
+      const formatted = data.map(p => ({
+        _id: p.id, name: p.name, price: p.price, category: p.category, details: p.details, attributes: p.attributes,
+        createdAt: p.created_at, updatedAt: p.updated_at
+      }));
+
+      return res.status(200).json(formatted);
     }
 
     // ── POST: Create product ──
@@ -42,14 +32,16 @@ async function handler(req, res) {
 
       if (!name) return res.status(400).json({ error: 'Product name is required' });
 
-      const result = await pool.query(
-        `INSERT INTO products (name, price, category, details, attributes)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id AS "_id", name, price, category, details, attributes,
-                   created_at AS "createdAt"`,
-        [name, price || 0, category || null, details || null, attributes ? JSON.stringify(attributes) : '{}']
-      );
-      return res.status(201).json(result.rows[0]);
+      const { data: p, error } = await supabase.from('products').insert([{
+        name, price: price || 0, category: category || null, details: details || null, attributes: attributes || {}
+      }]).select('*').single();
+
+      if (error) throw error;
+
+      const formatted = {
+        _id: p.id, name: p.name, price: p.price, category: p.category, details: p.details, attributes: p.attributes, createdAt: p.created_at
+      };
+      return res.status(201).json(formatted);
     }
 
     // ── PATCH/PUT: Update product ──
@@ -60,20 +52,21 @@ async function handler(req, res) {
 
       if (!prodId) return res.status(400).json({ error: 'Product ID is required' });
 
-      const result = await pool.query(
-        `UPDATE products 
-         SET name = COALESCE($1, name), price = COALESCE($2, price), 
-             category = COALESCE($3, category), details = COALESCE($4, details),
-             attributes = COALESCE($5, attributes), updated_at = CURRENT_TIMESTAMP
-         WHERE id = $6
-         RETURNING id AS "_id", name, price, category, details, attributes,
-                   updated_at AS "updatedAt"`,
-        [name || null, price ?? null, category || null, details || null,
-         attributes ? JSON.stringify(attributes) : null, prodId]
-      );
+      const updates = { updated_at: new Date().toISOString() };
+      if (name !== undefined) updates.name = name;
+      if (price !== undefined) updates.price = price;
+      if (category !== undefined) updates.category = category;
+      if (details !== undefined) updates.details = details;
+      if (attributes !== undefined) updates.attributes = attributes;
 
-      if (result.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
-      return res.status(200).json(result.rows[0]);
+      const { data: p, error } = await supabase.from('products').update(updates).eq('id', prodId).select('*').single();
+
+      if (error) return res.status(404).json({ error: 'Product not found' });
+
+      const formatted = {
+        _id: p.id, name: p.name, price: p.price, category: p.category, details: p.details, attributes: p.attributes, updatedAt: p.updated_at
+      };
+      return res.status(200).json(formatted);
     }
 
     // ── DELETE ──
@@ -82,7 +75,8 @@ async function handler(req, res) {
       const prodId = body?._id || body?.id || req.query?.id;
       if (!prodId) return res.status(400).json({ error: 'Product ID is required' });
 
-      await pool.query('DELETE FROM products WHERE id = $1', [prodId]);
+      const { error } = await supabase.from('products').delete().eq('id', prodId);
+      if (error) throw error;
       return res.status(200).json({ message: 'Product deleted' });
     }
 

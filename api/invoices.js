@@ -1,21 +1,21 @@
-import { getDbPool } from './_lib/db.js';
+import { supabase } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 import { logActivity } from './_lib/activityLogger.js';
 
 async function handler(req, res) {
-  const pool = getDbPool();
   const { method } = req;
 
   try {
     // ── GET: List invoices ──
     if (method === 'GET') {
-      const result = await pool.query(
-        `SELECT id AS "_id", client, product, price, status, location, emailed,
-                created_at AS "createdAt", updated_at AS "updatedAt"
-         FROM invoices
-         ORDER BY created_at DESC`
-      );
-      return res.status(200).json(result.rows);
+      const { data, error } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      const formatted = data.map(i => ({
+        _id: i.id, client: i.client, product: i.product, price: i.price, status: i.status, 
+        location: typeof i.location === 'string' ? JSON.parse(i.location) : i.location, emailed: i.emailed,
+        createdAt: i.created_at, updatedAt: i.updated_at
+      }));
+      return res.status(200).json(formatted);
     }
 
     // ── POST: Create invoice ──
@@ -27,22 +27,24 @@ async function handler(req, res) {
         return res.status(400).json({ error: 'Client and product are required' });
       }
 
-      const result = await pool.query(
-        `INSERT INTO invoices (client, product, price, status, location, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id AS "_id", client, product, price, status, location, emailed,
-                   created_at AS "createdAt"`,
-        [client, product, price || 0, status || 'draft',
-         location ? JSON.stringify(location) : null, req.user?.id || null]
-      );
+      const { data: i, error } = await supabase.from('invoices').insert([{
+        client, product, price: price || 0, status: status || 'draft', 
+        location: location || null, created_by: req.user?.id || null
+      }]).select('*').single();
+      if (error) throw error;
 
       await logActivity({
         type: 'invoice_created', action: `Invoice for "${client}" created`,
-        actorId: req.user?.id, refId: result.rows[0]._id, refType: 'invoice',
+        actorId: req.user?.id, refId: i.id, refType: 'invoice',
         meta: { client, product, price }
       });
 
-      return res.status(201).json(result.rows[0]);
+      const formatted = {
+        _id: i.id, client: i.client, product: i.product, price: i.price, status: i.status, 
+        location: typeof i.location === 'string' ? JSON.parse(i.location) : i.location, emailed: i.emailed,
+        createdAt: i.created_at
+      };
+      return res.status(201).json(formatted);
     }
 
     return res.status(405).end();

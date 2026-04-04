@@ -1,52 +1,47 @@
-import { getDbPool } from './_lib/db.js';
+import { supabase } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 import { logActivity } from './_lib/activityLogger.js';
 
 async function handler(req, res) {
-  const pool = getDbPool();
   const { method } = req;
 
   try {
-    // ── GET: List tasks (with optional filters) ──
+    // ── GET: List tasks ──
     if (method === 'GET') {
       const { status, assignee, priority, category } = req.query || {};
 
-      let query = `
-        SELECT t.id AS "_id", t.title, t.description, t.status, t.priority, t.category,
-               t.due_at AS "dueAt", t.comments, t.created_at AS "createdAt", t.updated_at AS "updatedAt",
-               json_build_object(
-                 'id', a.id, 'name', a.name, 'email', a.email
-               ) AS assignee
-        FROM tasks t
-        LEFT JOIN users a ON t.assignee_id = a.id
-      `;
-      const params = [];
-      const conditions = [];
+      let query = supabase.from('tasks').select('*').order('created_at', { ascending: false });
 
-      if (status) {
-        params.push(status);
-        conditions.push(`t.status = $${params.length}`);
-      }
+      if (status) query = query.eq('status', status);
+      if (priority) query = query.eq('priority', priority);
+      if (category) query = query.eq('category', category);
+
       if (assignee) {
-        params.push(assignee);
-        conditions.push(`a.email = $${params.length}`);
-      }
-      if (priority) {
-        params.push(priority);
-        conditions.push(`t.priority = $${params.length}`);
-      }
-      if (category) {
-        params.push(category);
-        conditions.push(`t.category = $${params.length}`);
+        const { data: aUser } = await supabase.from('users').select('id').eq('email', assignee).single();
+        if (aUser) {
+          query = query.eq('assignee_id', aUser.id);
+        } else {
+          return res.status(200).json([]);
+        }
       }
 
-      if (conditions.length > 0) {
-        query += ' WHERE ' + conditions.join(' AND ');
-      }
-      query += ' ORDER BY t.created_at DESC';
+      const { data: tasks, error: tErr } = await query;
+      if (tErr) throw tErr;
 
-      const result = await pool.query(query, params);
-      return res.status(200).json(result.rows);
+      const { data: users, error: uErr } = await supabase.from('users').select('id, name, email');
+      if (uErr) throw uErr;
+
+      const userMap = {};
+      users.forEach(u => userMap[u.id] = u);
+
+      const formatted = tasks.map(t => ({
+        _id: t.id, title: t.title, description: t.description, status: t.status, priority: t.priority, category: t.category,
+        dueAt: t.due_at, comments: typeof t.comments === 'string' ? JSON.parse(t.comments) : t.comments,
+        createdAt: t.created_at, updatedAt: t.updated_at,
+        assignee: t.assignee_id ? { id: t.assignee_id, name: userMap[t.assignee_id]?.name, email: userMap[t.assignee_id]?.email } : null
+      }));
+
+      return res.status(200).json(formatted);
     }
 
     // ── POST: Create a new task ──
@@ -56,38 +51,34 @@ async function handler(req, res) {
 
       if (!title) return res.status(400).json({ error: 'Task title is required' });
 
-      // Resolve assignee by email if provided
       let assigneeId = null;
+      let assigneeObj = null;
       if (assignee) {
-        const userRes = await pool.query('SELECT id FROM users WHERE email = $1', [assignee]);
-        assigneeId = userRes.rows[0]?.id || null;
+        const { data: aUser } = await supabase.from('users').select('id, name, email').eq('email', assignee).single();
+        if (aUser) {
+          assigneeId = aUser.id;
+          assigneeObj = aUser;
+        }
       }
 
-      const result = await pool.query(
-        `INSERT INTO tasks (title, description, assignee_id, created_by, status, priority, category, due_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id AS "_id", title, description, status, priority, category,
-                   due_at AS "dueAt", comments, created_at AS "createdAt"`,
-        [title, description || null, assigneeId, req.user?.id || null,
-         status || 'pending', priority || 'medium', category || null, dueAt || null]
-      );
+      const { data: newTask, error: iErr } = await supabase.from('tasks').insert([{
+        title, description: description || null, assignee_id: assigneeId, created_by: req.user?.id || null,
+        status: status || 'pending', priority: priority || 'medium', category: category || null, due_at: dueAt || null
+      }]).select('*').single();
+      if (iErr) throw iErr;
 
-      const newTask = result.rows[0];
-
-      // Fetch the assignee info for the response
-      if (assigneeId) {
-        const aRes = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [assigneeId]);
-        newTask.assignee = aRes.rows[0] || null;
-      } else {
-        newTask.assignee = null;
-      }
+      const formatted = {
+        _id: newTask.id, title: newTask.title, description: newTask.description, status: newTask.status,
+        priority: newTask.priority, category: newTask.category, dueAt: newTask.due_at, comments: newTask.comments,
+        createdAt: newTask.created_at, assignee: assigneeObj
+      };
 
       await logActivity({
         type: 'task_created', action: `Task "${title}" created`,
-        actorId: req.user?.id, refId: newTask._id, refType: 'task'
+        actorId: req.user?.id, refId: newTask.id, refType: 'task'
       });
 
-      return res.status(201).json(newTask);
+      return res.status(201).json(formatted);
     }
 
     // ── PATCH/PUT: Update a task ──
@@ -98,20 +89,22 @@ async function handler(req, res) {
 
       if (!taskId) return res.status(400).json({ error: 'Task ID is required' });
 
-      const result = await pool.query(
-        `UPDATE tasks
-         SET title = COALESCE($1, title), description = COALESCE($2, description),
-             status = COALESCE($3, status), priority = COALESCE($4, priority),
-             category = COALESCE($5, category), due_at = COALESCE($6, due_at),
-             comments = COALESCE($7, comments), updated_at = CURRENT_TIMESTAMP
-         WHERE id = $8
-         RETURNING id AS "_id", title, description, status, priority, category,
-                   due_at AS "dueAt", comments, updated_at AS "updatedAt"`,
-        [title || null, description || null, status || null, priority || null,
-         category || null, dueAt || null, comments ? JSON.stringify(comments) : null, taskId]
-      );
+      const updates = { updated_at: new Date().toISOString() };
+      if (title !== undefined) updates.title = title;
+      if (description !== undefined) updates.description = description;
+      if (status !== undefined) updates.status = status;
+      if (priority !== undefined) updates.priority = priority;
+      if (category !== undefined) updates.category = category;
+      if (dueAt !== undefined) updates.due_at = dueAt;
+      if (comments !== undefined) updates.comments = comments;
 
-      if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
+      const { data: updatedTask, error: uErr } = await supabase.from('tasks')
+        .update(updates).eq('id', taskId).select('*').single();
+        
+      if (uErr) {
+        // Assume 404 if error
+        return res.status(404).json({ error: 'Task not found' });
+      }
 
       if (status) {
         await logActivity({
@@ -120,7 +113,13 @@ async function handler(req, res) {
         });
       }
 
-      return res.status(200).json(result.rows[0]);
+      const formatted = {
+        _id: updatedTask.id, title: updatedTask.title, description: updatedTask.description, status: updatedTask.status,
+        priority: updatedTask.priority, category: updatedTask.category, dueAt: updatedTask.due_at, comments: updatedTask.comments,
+        updatedAt: updatedTask.updated_at
+      };
+
+      return res.status(200).json(formatted);
     }
 
     // ── DELETE ──
@@ -129,7 +128,8 @@ async function handler(req, res) {
       const taskId = body?._id || body?.id || req.query?.id;
       if (!taskId) return res.status(400).json({ error: 'Task ID is required' });
 
-      await pool.query('DELETE FROM tasks WHERE id = $1', [taskId]);
+      const { error: dErr } = await supabase.from('tasks').delete().eq('id', taskId);
+      if (dErr) throw dErr;
 
       await logActivity({
         type: 'task_deleted', action: 'Task deleted',

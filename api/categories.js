@@ -1,20 +1,20 @@
-import { getDbPool } from './_lib/db.js';
+import { supabase } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 
 async function handler(req, res) {
-  const pool = getDbPool();
   const { method } = req;
 
   try {
     // ── GET: List all categories ──
     if (method === 'GET') {
-      const result = await pool.query(
-        `SELECT id AS "_id", name, fields,
-                created_at AS "createdAt", updated_at AS "updatedAt"
-         FROM categories
-         ORDER BY name ASC`
-      );
-      return res.status(200).json(result.rows);
+      const { data, error } = await supabase.from('categories').select('*').order('name', { ascending: true });
+      if (error) throw error;
+      
+      const formatted = data.map(c => ({
+        _id: c.id, name: c.name, fields: typeof c.fields === 'string' ? JSON.parse(c.fields) : c.fields,
+        createdAt: c.created_at, updatedAt: c.updated_at
+      }));
+      return res.status(200).json(formatted);
     }
 
     // ── POST: Create a new category ──
@@ -24,13 +24,19 @@ async function handler(req, res) {
 
       if (!name) return res.status(400).json({ error: 'Category name is required' });
 
-      const result = await pool.query(
-        `INSERT INTO categories (name, fields)
-         VALUES ($1, $2)
-         RETURNING id AS "_id", name, fields, created_at AS "createdAt"`,
-        [name.trim(), fields ? JSON.stringify(fields) : '[]']
-      );
-      return res.status(201).json(result.rows[0]);
+      const { data: c, error } = await supabase.from('categories').insert([{
+        name: name.trim(), fields: fields || []
+      }]).select('*').single();
+
+      if (error) {
+        if (error.code === '23505' || (error.message && error.message.includes('unique'))) {
+          return res.status(409).json({ error: 'A category with that name already exists' });
+        }
+        throw error;
+      }
+      
+      const formatted = { _id: c.id, name: c.name, fields: typeof c.fields === 'string' ? JSON.parse(c.fields) : c.fields, createdAt: c.created_at };
+      return res.status(201).json(formatted);
     }
 
     // ── PATCH/PUT: Update a category ──
@@ -41,16 +47,16 @@ async function handler(req, res) {
 
       if (!catId) return res.status(400).json({ error: 'Category ID is required' });
 
-      const result = await pool.query(
-        `UPDATE categories SET name = COALESCE($1, name), fields = COALESCE($2, fields),
-                updated_at = CURRENT_TIMESTAMP
-         WHERE id = $3
-         RETURNING id AS "_id", name, fields, updated_at AS "updatedAt"`,
-        [name || null, fields ? JSON.stringify(fields) : null, catId]
-      );
+      const updates = { updated_at: new Date().toISOString() };
+      if (name !== undefined) updates.name = name;
+      if (fields !== undefined) updates.fields = fields;
 
-      if (result.rows.length === 0) return res.status(404).json({ error: 'Category not found' });
-      return res.status(200).json(result.rows[0]);
+      const { data: c, error } = await supabase.from('categories').update(updates).eq('id', catId).select('*').single();
+
+      if (error) return res.status(404).json({ error: 'Category not found' });
+      
+      const formatted = { _id: c.id, name: c.name, fields: typeof c.fields === 'string' ? JSON.parse(c.fields) : c.fields, updatedAt: c.updated_at };
+      return res.status(200).json(formatted);
     }
 
     // ── DELETE ──
@@ -59,16 +65,14 @@ async function handler(req, res) {
       const catId = body?._id || body?.id || req.query?.id;
       if (!catId) return res.status(400).json({ error: 'Category ID is required' });
 
-      await pool.query('DELETE FROM categories WHERE id = $1', [catId]);
+      const { error } = await supabase.from('categories').delete().eq('id', catId);
+      if (error) throw error;
       return res.status(200).json({ message: 'Category deleted' });
     }
 
     return res.status(405).end();
   } catch (error) {
     console.error('Categories error:', error);
-    if (error.code === '23505') {
-      return res.status(409).json({ error: 'A category with that name already exists' });
-    }
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
