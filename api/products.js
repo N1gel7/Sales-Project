@@ -82,7 +82,7 @@ async function handler(req, res) {
 
     return res.status(405).end();
   } catch (error) {
-    console.error('Products error:', error);
+    console.error('Products error:', error.message || error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
