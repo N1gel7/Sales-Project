@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { 
-  Mail, 
-  Lock, 
-  LogIn, 
-  Eye, 
-  EyeOff, 
-  Building2, 
-  Users, 
-  MapPin, 
+import {
+  Mail,
+  Lock,
+  LogIn,
+  Eye,
+  EyeOff,
+  Building2,
+  Users,
+  MapPin,
   BarChart3,
   Shield,
   ArrowRight
@@ -25,18 +25,35 @@ export default function Login(): React.ReactElement {
 
 
 
+  // Clear any existing stale auth data on mount
+  React.useEffect(() => {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_info');
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
       const res = await api.login(email.trim().toLowerCase(), password);
+
+      if (!res || !res.token) {
+        throw new Error('Invalid authentication response from server');
+      }
+
+      // Store JWT securely in localStorage
       localStorage.setItem('auth_token', res.token);
-      // Store user info for display
-      localStorage.setItem('user_info', JSON.stringify(res.user));
+
+      if (res.user) {
+        localStorage.setItem('user_info', JSON.stringify(res.user));
+      }
+
+      // Navigate to dashboard
       navigate('/');
     } catch (e: any) {
-      setError(e.message || 'Login failed');
+      // Axios error formatting handles the detail, catch block gracefully catches the formatted string
+      setError(e.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
@@ -53,7 +70,7 @@ export default function Login(): React.ReactElement {
               backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
             }}></div>
           </div>
-          
+
           <div className="relative z-10 max-w-md m-auto p-8 space-y-8">
             {/* Logo & Title */}
             <div className="space-y-4">
@@ -83,7 +100,7 @@ export default function Login(): React.ReactElement {
                     <div className="text-blue-200 text-sm">Track field teams and assign tasks efficiently</div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start space-x-3">
                   <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
                     <MapPin className="h-4 w-4" />
@@ -93,7 +110,7 @@ export default function Login(): React.ReactElement {
                     <div className="text-blue-200 text-sm">Monitor field activities with GPS coordinates</div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start space-x-3">
                   <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-1">
                     <BarChart3 className="h-4 w-4" />
@@ -219,7 +236,7 @@ export default function Login(): React.ReactElement {
                     <h3 className="text-sm font-medium text-gray-700 mb-2">Demo Accounts</h3>
                     <p className="text-xs text-gray-500">Use these credentials to test the application</p>
                   </div>
-                  
+
                   <div className="space-y-3">
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="text-sm font-medium text-blue-900 mb-1">Admin Account</div>
@@ -228,7 +245,7 @@ export default function Login(): React.ReactElement {
                         <div><strong>Password:</strong> Admin#123</div>
                       </div>
                     </div>
-                    
+
                     <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                       <div className="text-sm font-medium text-green-900 mb-1">Manager Account</div>
                       <div className="text-xs text-green-700">
@@ -236,7 +253,7 @@ export default function Login(): React.ReactElement {
                         <div><strong>Password:</strong> Manager#123</div>
                       </div>
                     </div>
-                    
+
                     <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
                       <div className="text-sm font-medium text-purple-900 mb-1">Sales Rep Account</div>
                       <div className="text-xs text-purple-700">
@@ -245,8 +262,8 @@ export default function Login(): React.ReactElement {
                       </div>
                     </div>
                   </div>
-                  
-                  
+
+
                 </div>
 
               </div>
