@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key-for-dev';
+import { JWT_SECRET } from './jwtConfig.js';
 
 /**
  * Serverless middleware to protect private API routes.
@@ -17,15 +16,19 @@ export function withAuth(handler) {
         return handler(req, res);
       }
 
-      // 1. Get auth token (checking cookies first, fallback to header)
-      let token = req.cookies?.authToken;
-
-      if (!token) {
-        const authHeader = req.headers['authorization'] || req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          token = authHeader.split(' ')[1];
-        }
+      // 1. Prefer Authorization: Bearer (SPA / localStorage) over cookies.
+      //    Stale HttpOnly cookies from an old JWT_SECRET or session used to override
+      //    a valid Bearer token and caused jwt.verify → "invalid signature".
+      let token = null;
+      const authHeader = req.headers['authorization'] || req.headers.authorization;
+      if (typeof authHeader === 'string') {
+        const m = /^Bearer\s+(\S+)/i.exec(authHeader.trim());
+        if (m) token = m[1];
       }
+      if (!token) {
+        token = req.cookies?.authToken;
+      }
+      if (token) token = String(token).trim();
 
       if (!token) {
         return res.status(401).json({ error: 'Unauthorized: Access token is required' });

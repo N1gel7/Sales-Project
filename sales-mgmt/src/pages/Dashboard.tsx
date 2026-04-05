@@ -110,6 +110,12 @@ export default function Dashboard(): React.ReactElement {
 
       clearTimeout(timeoutId);
 
+      if (statsRes.status === 401 || activityRes.status === 401) {
+        localStorage.removeItem('auth_token');
+        window.location.href = '/login';
+        return;
+      }
+
       if (!statsRes.ok || !activityRes.ok) {
         throw new Error('Failed to fetch dashboard data');
       }
@@ -118,7 +124,7 @@ export default function Dashboard(): React.ReactElement {
       const activityData = await activityRes.json();
 
       setStats(statsData);
-      setActivities(activityData);
+      setActivities(Array.isArray(activityData) ? activityData : []);
     } catch (error: unknown) {
       console.error('Failed to load dashboard:', error);
       if (error instanceof Error && error.name === 'AbortError') {
@@ -435,24 +441,42 @@ export default function Dashboard(): React.ReactElement {
           <div className="card-header">Location Activity</div>
           <div className="card-body">
             <div className="space-y-3">
-              {stats?.locationActivity?.slice(0, 5).map((location) => (
-                <div key={`${location._id.lat}-${location._id.lng}`} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="h-4 w-4 text-gray-400" />
-                    <div>
-                      <p className="font-medium text-sm">
-                        {location._id.lat.toFixed(2)}, {location._id.lng.toFixed(2)}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {location.types.join(', ')}
-                      </p>
+              {stats?.locationActivity?.slice(0, 5).map((location, idx) => {
+                let lat: number | undefined;
+                let lng: number | undefined;
+                const id = location._id as { lat?: number; lng?: number } | string | undefined;
+                if (id && typeof id === 'object') {
+                  lat = id.lat;
+                  lng = id.lng;
+                } else if (typeof id === 'string') {
+                  try {
+                    const p = JSON.parse(id) as { lat?: number; lng?: number };
+                    lat = p.lat;
+                    lng = p.lng;
+                  } catch {
+                    /* legacy non-JSON key */
+                  }
+                }
+                const latN = lat != null ? Number(lat) : NaN;
+                const lngN = lng != null ? Number(lng) : NaN;
+                const label =
+                  Number.isFinite(latN) && Number.isFinite(lngN)
+                    ? `${latN.toFixed(2)}, ${lngN.toFixed(2)}`
+                    : 'Unknown location';
+                const types = Array.isArray(location.types) ? location.types : [];
+                return (
+                  <div key={Number.isFinite(latN) && Number.isFinite(lngN) ? `${latN}-${lngN}` : `loc-${idx}`} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <MapPin className="h-4 w-4 text-gray-400" />
+                      <div>
+                        <p className="font-medium text-sm">{label}</p>
+                        <p className="text-xs text-gray-500">{types.length ? types.join(', ') : '—'}</p>
+                      </div>
                     </div>
+                    <span className="font-semibold text-blue-600">{location.count} uploads</span>
                   </div>
-                  <span className="font-semibold text-blue-600">
-                    {location.count} uploads
-                  </span>
-                </div>
-              ))}
+                );
+              })}
               {(!stats?.locationActivity || stats.locationActivity.length === 0) && (
                 <p className="text-gray-500 text-center py-4">No location data available</p>
               )}
@@ -468,34 +492,39 @@ export default function Dashboard(): React.ReactElement {
           <div className="card-body">
             {stats?.dailySales && stats.dailySales.length > 0 ? (
               <div className="space-y-4">
-                {stats?.dailySales?.map((day) => (
-                  <div key={`${day._id.year}-${day._id.month}-${day._id.day}`} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
-                        {day._id.day}
+                {stats?.dailySales?.map((day, dayIdx) => {
+                  const y = day._id?.year;
+                  const mo = day._id?.month;
+                  const d = day._id?.day;
+                  const dateValid = y != null && mo != null && d != null;
+                  const maxRev = Math.max(...(stats?.dailySales?.map((x) => x.revenue) || [1]), 1);
+                  return (
+                    <div key={dateValid ? `${y}-${mo}-${d}` : `day-${dayIdx}`} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
+                          {dateValid ? d : '—'}
+                        </div>
+                        <div>
+                          <p className="font-medium">
+                            {dateValid ? new Date(y, mo - 1, d).toLocaleDateString() : '—'}
+                          </p>
+                          <p className="text-xs text-gray-500">{day.count ?? 0} invoices</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium">
-                          {new Date(day._id.year, day._id.month - 1, day._id.day).toLocaleDateString()}
-                        </p>
-                        <p className="text-xs text-gray-500">{day.count} invoices</p>
+                      <div className="text-right">
+                        <p className="font-semibold text-green-600">{formatCurrency(day.revenue ?? 0)}</p>
+                        <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
+                          <div
+                            className="bg-green-500 h-2 rounded-full"
+                            style={{
+                              width: `${Math.min(100, ((day.revenue ?? 0) / maxRev) * 100)}%`,
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-green-600">
-                        {formatCurrency(day.revenue)}
-                      </p>
-                      <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
-                        <div 
-                          className="bg-green-500 h-2 rounded-full" 
-                          style={{ 
-                            width: `${Math.min(100, (day.revenue / Math.max(...(stats?.dailySales?.map(d => d.revenue) || [1]))) * 100)}%` 
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-gray-500 text-center py-8">No sales data for the selected period</p>

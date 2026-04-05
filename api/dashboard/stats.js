@@ -9,7 +9,7 @@ async function handler(req, res) {
       supabase.from('tasks').select('status, assignee_id'),
       supabase.from('invoices').select('price, product, created_at'),
       supabase.from('users').select('id, name, code'),
-      supabase.from('uploads').select('coords')
+      supabase.from('uploads').select('coords, type')
     ]);
 
     // ── Task stats: count by status ──
@@ -62,15 +62,39 @@ async function handler(req, res) {
     });
     const productPerformance = Object.values(prodMap).sort((a,b) => b.revenue - a.revenue).slice(0, 10);
 
-    // ── Location activity: from uploads with coordinates ──
+    // ── Location activity: from uploads with coordinates (shape matches Dashboard: _id: { lat, lng }) ──
+    function parseUploadCoords(coords) {
+      if (coords == null) return null;
+      let c = coords;
+      if (typeof c === 'string') {
+        try {
+          c = JSON.parse(c);
+        } catch {
+          return null;
+        }
+      }
+      if (typeof c !== 'object') return null;
+      const lat = Number(c.lat ?? c.latitude);
+      const lng = Number(c.lng ?? c.longitude ?? c.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { lat, lng };
+    }
+
     const locMap = {};
-    (uploads || []).forEach(u => {
-      if (!u.coords) return;
-      const key = typeof u.coords === 'string' ? u.coords : JSON.stringify(u.coords);
-      if (!locMap[key]) locMap[key] = { _id: key, count: 0, types: ['Upload'] };
+    (uploads || []).forEach((u) => {
+      const pt = parseUploadCoords(u.coords);
+      if (!pt) return;
+      const key = `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`;
+      const typeLabel = u.type ? String(u.type).split('/')[0] || 'file' : 'upload';
+      if (!locMap[key]) {
+        locMap[key] = { _id: { lat: pt.lat, lng: pt.lng }, count: 0, types: [] };
+      }
       locMap[key].count++;
+      if (!locMap[key].types.includes(typeLabel)) {
+        locMap[key].types.push(typeLabel);
+      }
     });
-    const locationActivity = Object.values(locMap).sort((a,b) => b.count - a.count).slice(0, 20);
+    const locationActivity = Object.values(locMap).sort((a, b) => b.count - a.count).slice(0, 20);
 
     const end = new Date();
     return res.status(200).json({
