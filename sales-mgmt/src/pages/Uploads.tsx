@@ -19,13 +19,29 @@ export default function Uploads(): React.ReactElement {
 
   async function load() {
     try {
-      const data = await fetch('/api/uploads', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setItems([]);
+        return;
+      }
+      const res = await fetch('/api/uploads', {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const uploads = await data.json();
-      setItems(uploads);
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) {
+          localStorage.removeItem('auth_token');
+          window.location.href = '/login';
+          return;
+        }
+        console.error('Uploads API error:', data);
+        setItems([]);
+        return;
+      }
+      setItems(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load uploads:', error);
+      setItems([]);
     }
   }
 
@@ -126,9 +142,9 @@ export default function Uploads(): React.ReactElement {
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      const maxSize = 100 * 1024 * 1024; // 100MB
+      const maxSize = 25 * 1024 * 1024; // keep in sync with API Multer limit (25MB)
       if (file.size > maxSize) {
-        alert(`File too large. Maximum size is 100MB. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        alert(`File too large. Maximum size is 25MB. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
         e.target.value = '';
         return;
       }
@@ -148,23 +164,19 @@ export default function Uploads(): React.ReactElement {
     setUploadProgress(0);
     try {
       const token = localStorage.getItem('auth_token');
-      
-      const payload = {
-        filename: selectedFile.name,
-        type: selectedFile.type.startsWith('image/') ? 'image' : 
-              selectedFile.type.startsWith('video/') ? 'video' : 'audio',
-        note: note,
-        transcription: transcription.trim() || undefined,
-        coords: location || undefined
-      };
-      
+
+      const formData = new FormData();
+      formData.append('files', selectedFile);
+      if (note.trim()) formData.append('note', note.trim());
+      if (transcription.trim()) formData.append('transcription', transcription.trim());
+      if (location) formData.append('coords', JSON.stringify(location));
+
       const res = await fetch('/api/uploads', {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload)
+        body: formData,
       });
       
       if (!res.ok) {
@@ -280,45 +292,65 @@ export default function Uploads(): React.ReactElement {
         <div className="card-header">Your Pipeline Uploads</div>
         <div className="card-body">
           <ul className="divide-y divide-gray-100">
-            {items.map((upload) => (
-              <li key={upload._id} className="py-3 flex items-start justify-between gap-4">
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{upload.note || 'No text note'}</div>
-                  <div className="text-xs text-gray-500 mb-2">
-                    {upload.type.toUpperCase()} • {upload.user?.code || 'Unknown Rep'}
-                    {upload.coords?.lat && upload.coords?.lng ? ` • 📍 (${upload.coords.lat.toFixed(4)}, ${upload.coords.lng.toFixed(4)})` : null}
-                  </div>
-                  
-                  {upload.transcription && (
-                    <div className="mt-2 p-3 bg-blue-50/50 border border-blue-100 rounded-md text-sm">
-                      <div className="font-semibold text-blue-900 mb-1 flex items-center gap-1">🎙️ Transcription:</div>
-                      <p className="text-blue-800">"{upload.transcription}"</p>
-                      {upload.translation && (
-                        <>
-                          <div className="font-semibold text-blue-900 mt-2 flex items-center gap-1">🌍 Translation:</div>
-                          <p className="text-blue-800">"{upload.translation}"</p>
-                        </>
-                      )}
-                    </div>
-                  )}
+            {items.length === 0 ? (
+              <li className="py-6 text-center text-sm text-gray-500">No uploads yet.</li>
+            ) : (
+              items.map((upload) => {
+                const t = upload.type || '';
+                const isImage = t.startsWith('image/') || t === 'image';
+                const isVideo = t.startsWith('video/') || t === 'video';
+                const isAudio = t.startsWith('audio/') || t === 'audio';
+                const mediaSrc = upload.fileUrl || upload.mediaUrl;
+                return (
+                  <li key={upload._id} className="py-3 flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{upload.note || 'No text note'}</div>
+                      <div className="text-xs text-gray-500 mb-2">
+                        {(t || 'file').toUpperCase()} • {upload.user?.code || 'Unknown Rep'}
+                        {upload.coords?.lat != null && upload.coords?.lng != null
+                          ? ` • 📍 (${Number(upload.coords.lat).toFixed(4)}, ${Number(upload.coords.lng).toFixed(4)})`
+                          : null}
+                      </div>
 
-                  {(upload.fileUrl || upload.mediaUrl) && (
-                    <div className="mt-3">
-                      {upload.type === 'image' && (
-                        <img src={upload.fileUrl || upload.mediaUrl} alt="Upload" className="h-32 object-cover rounded-md border" />
+                      {upload.transcription && (
+                        <div className="mt-2 p-3 bg-blue-50/50 border border-blue-100 rounded-md text-sm">
+                          <div className="font-semibold text-blue-900 mb-1 flex items-center gap-1">🎙️ Transcription:</div>
+                          <p className="text-blue-800">&quot;{upload.transcription}&quot;</p>
+                          {upload.translation && (
+                            <>
+                              <div className="font-semibold text-blue-900 mt-2 flex items-center gap-1">🌍 Translation:</div>
+                              <p className="text-blue-800">&quot;{upload.translation}&quot;</p>
+                            </>
+                          )}
+                        </div>
                       )}
-                      {upload.type === 'video' && (
-                        <video src={upload.fileUrl || upload.mediaUrl} controls className="h-40 rounded-md bg-black" />
-                      )}
-                      {upload.type === 'audio' && (
-                        <audio src={upload.fileUrl || upload.mediaUrl} controls className="w-full max-w-sm" />
+
+                      {mediaSrc && (
+                        <div className="mt-3">
+                          {isImage && (
+                            <img src={mediaSrc} alt="Upload" className="h-32 object-cover rounded-md border" />
+                          )}
+                          {isVideo && (
+                            <video src={mediaSrc} controls className="h-40 rounded-md bg-black" />
+                          )}
+                          {isAudio && (
+                            <audio src={mediaSrc} controls className="w-full max-w-sm" />
+                          )}
+                          {!isImage && !isVideo && !isAudio && (
+                            <a href={mediaSrc} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
+                              Open file
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-                <div className="text-xs text-gray-500 whitespace-nowrap">{new Date(upload.createdAt).toLocaleDateString()}</div>
-              </li>
-            ))}
+                    <div className="text-xs text-gray-500 whitespace-nowrap">
+                      {upload.createdAt ? new Date(upload.createdAt).toLocaleDateString() : '—'}
+                    </div>
+                  </li>
+                );
+              })
+            )}
           </ul>
         </div>
       </div>

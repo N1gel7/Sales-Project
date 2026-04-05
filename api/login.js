@@ -1,9 +1,7 @@
 import supabase from './_lib/supabase.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key-for-dev';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+import { JWT_SECRET, JWT_EXPIRES_IN } from './_lib/jwtConfig.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -63,9 +61,8 @@ export default async function handler(req, res) {
       expiresIn: JWT_EXPIRES_IN
     });
 
-    // Set cookie for localhost development via Vercel headers
-    // 60*60 is 3600 seconds = 1 hour (aligns with what user wrote)
-    res.setHeader('Set-Cookie', `authToken=${token}; HttpOnly; Path=/; Max-Age=3600; SameSite=Lax`);
+    // SPA uses Authorization: Bearer + localStorage only. Do not set authToken cookie:
+    // browsers kept stale cookies that overrode Bearer and caused jwt "invalid signature".
 
     // Response data
     const { password_hash, ...safeUser } = user;
