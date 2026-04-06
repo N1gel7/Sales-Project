@@ -42,8 +42,20 @@ export default function Invoices(): React.ReactElement {
 
   async function sendEmail(id: string) {
     if (!emailTo) return alert('Enter recipient email');
-    await fetch('/api/invoices-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, to: emailTo }) });
-    alert('Email sent (if SMTP configured)');
+    const response = await fetch(`/api/invoices/${id}/email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      },
+      body: JSON.stringify({ to: emailTo })
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      throw new Error(result?.message || 'Failed to send invoice email');
+    }
+    alert(`Invoice sent to ${result.recipient}`);
+    await load();
   }
 
   return (

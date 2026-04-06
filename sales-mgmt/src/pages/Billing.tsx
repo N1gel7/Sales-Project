@@ -36,6 +36,7 @@ export default function Billing(): React.ReactElement {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
   
   // Create invoice form
   const [newInvoice, setNewInvoice] = useState({
@@ -185,7 +186,7 @@ export default function Billing(): React.ReactElement {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `invoice-${invoiceId}.html`;
+      a.download = `invoice-${invoiceId}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -371,7 +372,7 @@ export default function Billing(): React.ReactElement {
                   </div>
                   <div className="flex items-center gap-2 ml-4">
                     <button
-                      onClick={() => openPDF(invoice._id)}
+                      onClick={() => setPreviewInvoice(invoice)}
                       className="h-8 px-3 rounded-md border border-gray-200 text-sm hover:bg-gray-50 flex items-center gap-1"
                     >
                       <Eye className="h-3 w-3" />
@@ -468,6 +469,62 @@ export default function Billing(): React.ReactElement {
                 className="h-9 px-4 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
               >
                 Create Invoice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Preview Modal */}
+      {previewInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-5 w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold">Invoice Preview</h3>
+              <button
+                onClick={() => setPreviewInvoice(null)}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div><span className="text-gray-500">Invoice #:</span> <span className="font-medium">{previewInvoice._id.slice(-8)}</span></div>
+              <div><span className="text-gray-500">Client:</span> <span className="font-medium">{previewInvoice.client}</span></div>
+              <div><span className="text-gray-500">Product:</span> <span className="font-medium">{previewInvoice.product}</span></div>
+              <div><span className="text-gray-500">Amount:</span> <span className="font-semibold text-green-600">{formatCurrency(previewInvoice.price)}</span></div>
+              <div><span className="text-gray-500">Status:</span> <span className="font-medium">{previewInvoice.status}</span></div>
+              <div><span className="text-gray-500">Created:</span> <span className="font-medium">{new Date(previewInvoice.createdAt).toLocaleString()}</span></div>
+              {previewInvoice.location && (
+                <div>
+                  <span className="text-gray-500">Location:</span>{' '}
+                  <span className="font-medium">
+                    {previewInvoice.location.lat.toFixed(4)}, {previewInvoice.location.lng.toFixed(4)}
+                  </span>
+                </div>
+              )}
+              {previewInvoice.notes && (
+                <div><span className="text-gray-500">Notes:</span> <span className="font-medium">{previewInvoice.notes}</span></div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <button
+                onClick={() => setPreviewInvoice(null)}
+                className="h-9 px-3 rounded-md border border-gray-200 text-sm hover:bg-gray-50"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  openPDF(previewInvoice._id);
+                  setPreviewInvoice(null);
+                }}
+                className="h-9 px-3 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 flex items-center gap-1"
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
               </button>
             </div>
           </div>
