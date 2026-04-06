@@ -133,6 +133,8 @@ async function initDB() {
 
     // ─────────────────────────────────────────────
     // 7. Activity Logs
+    // Tracks global system events for auditing and
+    // dashboard activity feeds.
     // ─────────────────────────────────────────────
     console.log('Creating activity_logs table...');
     await pool.query(`
@@ -147,6 +149,14 @@ async function initDB() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Performance indexes for activity_logs —
+    // speeds up: feed queries (actor + time), type filters, and ref lookups
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_id    ON activity_logs (actor_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_type         ON activity_logs (type)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_ref_id       ON activity_logs (ref_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at   ON activity_logs (created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_time   ON activity_logs (actor_id, created_at DESC)`);
 
     // ─────────────────────────────────────────────
     // 8. Chats
@@ -221,6 +231,26 @@ async function initDB() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // ─────────────────────────────────────────────
+    // Performance Indexes (Analytics)
+    // Speeds up SQL GROUP BY aggregations used by
+    // the /api/analytics/* endpoints.
+    // ─────────────────────────────────────────────
+    console.log('Creating analytics performance indexes...');
+    // invoices: date-range grouping and rep attribution
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created_at  ON invoices (created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created_by  ON invoices (created_by)`);
+    // tasks: status filtering and per-assignee completion queries
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status          ON tasks (status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id     ON tasks (assignee_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status ON tasks (assignee_id, status)`);
+    console.log('✅ Analytics indexes created.');
+
+    console.log('\n💡 Next step: run   node scripts/setup-analytics-rpc.js');
+    console.log('   This registers the SQL RPC functions (get_daily_sales, get_monthly_sales,');
+    console.log('   get_task_completion_rates, get_product_performance) used by /api/analytics/*.');
+    console.log('   Without it, the endpoints fall back to JavaScript aggregation automatically.\n');
 
     // ─────────────────────────────────────────────
     // Seed Initial Users
