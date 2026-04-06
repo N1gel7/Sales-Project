@@ -85,10 +85,12 @@ async function initDB() {
         category VARCHAR(255),
         due_at TIMESTAMP WITH TIME ZONE,
         comments JSONB DEFAULT '[]',
+        location JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS location JSONB`);
 
     // ─────────────────────────────────────────────
     // 5. Invoices
