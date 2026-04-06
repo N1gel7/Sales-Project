@@ -102,7 +102,11 @@ export const api = {
     return http('/api/general?type=uploads');
   },
   createUpload(formData: FormData) {
-    return axiosInstance.post('/api/general?type=uploads', formData);
+    return axiosInstance.post('/api/uploads', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
   },
   // chats
   listChats() {

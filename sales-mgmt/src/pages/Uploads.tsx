@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { api } from '../services/api';
 
 type Location = { lat: number; lng: number } | null;
 
@@ -14,8 +15,16 @@ export default function Uploads(): React.ReactElement {
 
   // Speech Recognition State
   const [transcription, setTranscription] = useState('');
+  const [interimTranscription, setInterimTranscription] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
+
+  // Audio Visualizer Refs
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   async function load() {
     try {
@@ -55,43 +64,154 @@ export default function Uploads(): React.ReactElement {
       recognition.lang = 'en-US';
 
       recognition.onresult = (event: any) => {
-        let currentTranscript = '';
+        let currentFinalTranscript = '';
+        let currentInterimTranscript = '';
+        
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
-            currentTranscript += transcript + ' ';
+            currentFinalTranscript += transcript + ' ';
+          } else {
+            currentInterimTranscript += transcript;
           }
         }
-        if (currentTranscript) {
-          setTranscription((prev) => prev + currentTranscript);
+        
+        if (currentFinalTranscript) {
+          setTranscription((prev) => prev + currentFinalTranscript);
         }
+        setInterimTranscription(currentInterimTranscript);
       };
 
       recognition.onerror = (event: any) => {
         console.error("Speech recognition error:", event.error);
         setIsRecording(false);
+        stopVisualizer();
       };
       
       recognition.onend = () => {
         setIsRecording(false);
+        stopVisualizer();
+        setInterimTranscription('');
       };
 
       recognitionRef.current = recognition;
     }
+
+    return () => {
+      stopVisualizer();
+    };
   }, []);
 
-  const toggleRecording = () => {
+  const startVisualizer = async (): Promise<boolean> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioCtx;
+
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+      
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      analyserRef.current = analyser;
+      
+      const source = audioCtx.createMediaStreamSource(stream);
+      source.connect(analyser);
+
+      visualize();
+      return true;
+    } catch (err) {
+      console.error('Error accessing mic for visualizer:', err);
+      // If visualizer fails, we can still fall back and try SpeechRecognition
+      return true; 
+    }
+  };
+
+  const stopVisualizer = () => {
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    if (mediaStreamRef.current) mediaStreamRef.current.getTracks().forEach(track => track.stop());
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => {});
+    }
+    
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const canvasCtx = canvas.getContext('2d');
+      if (canvasCtx) canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  const visualize = () => {
+    if (!canvasRef.current || !analyserRef.current) return;
+    const canvas = canvasRef.current;
+    const canvasCtx = canvas.getContext('2d');
+    if (!canvasCtx) return;
+
+    const analyser = analyserRef.current;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const draw = () => {
+      animationFrameRef.current = requestAnimationFrame(draw);
+      analyser.getByteFrequencyData(dataArray);
+
+      canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const rawValue = dataArray[i]; // 0 to 255
+        
+        // Scale the raw value down so it fits nicely inside the canvas height
+        let scaledHeight = (rawValue / 255) * canvas.height;
+        
+        // Ensure there is always a tiny blip even during perfect silence
+        if (scaledHeight < 2) {
+          scaledHeight = 2;
+        }
+
+        // dynamic coloring based on intensity
+        const r = Math.min(255, 79 + rawValue); 
+        const g = 70;
+        const b = 229;
+
+        canvasCtx.fillStyle = `rgb(${r},${g},${b})`;
+        canvasCtx.fillRect(x, (canvas.height - scaledHeight) / 2, barWidth, scaledHeight);
+
+        x += barWidth + 1;
+      }
+    };
+    draw();
+  };
+
+  const toggleRecording = async () => {
     if (isRecording) {
       recognitionRef.current?.stop();
       setIsRecording(false);
+      stopVisualizer();
+      setInterimTranscription('');
     } else {
       if (!recognitionRef.current) {
         alert("Your browser does not support Speech Recognition.");
         return;
       }
-      // setTranscription(''); // optional to clear previous
-      recognitionRef.current.start();
+      
       setIsRecording(true);
+
+      // We ensure the visualizer's getUserMedia grabs the microphone first
+      // Some browsers drop SpeechRecognition if multiple inputs compete simultaneously.
+      await startVisualizer();
+      
+      try {
+        recognitionRef.current.start();
+      } catch (e) {
+        console.error("Speech Recognition Engine failed to start", e);
+      }
     }
   };
 
@@ -166,31 +286,24 @@ export default function Uploads(): React.ReactElement {
       const token = localStorage.getItem('auth_token');
 
       const formData = new FormData();
-      formData.append('files', selectedFile);
+      // Ensure the browser explicitly passes the filename parameter inside the blob payload
+      formData.append('files', selectedFile, selectedFile.name);
+      
       if (note.trim()) formData.append('note', note.trim());
       if (transcription.trim()) formData.append('transcription', transcription.trim());
+      if (interimTranscription.trim()) formData.append('interimTranscription', interimTranscription.trim());
       if (location) formData.append('coords', JSON.stringify(location));
 
-      const res = await fetch('/api/uploads', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Server error: ${res.status} - ${errorText}`);
-      }
+      await api.createUpload(formData);
       
       setNote(''); 
       setTranscription('');
+      setInterimTranscription('');
       setSelectedFile(null);
       await load();
       alert('Upload successful!');
-    } catch (error) {
-      alert('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } catch (error: any) {
+      alert('Upload failed: ' + (error.message || 'Unknown error'));
     } finally {
       setUploading(false);
     }
@@ -226,7 +339,17 @@ export default function Uploads(): React.ReactElement {
                 )}
               </div>
             )}
+            
+            <div className="mt-2 text-xs">
+              {location ? (
+                <div className="text-green-600">📍 Lat: {location.lat.toFixed(4)}, Lng: {location.lng.toFixed(4)}</div>
+              ) : (
+                <div className="text-gray-500">Location not captured yet.</div>
+              )}
+              {locationError && <div className="text-red-500 mt-1">⚠️ {locationError}</div>}
+            </div>
           </div>
+          
           <div className="space-y-2 flex flex-col justify-between">
             <div>
               <label className="text-sm font-medium">Note / Meta</label>
@@ -237,33 +360,47 @@ export default function Uploads(): React.ReactElement {
                 placeholder="Add a text note about this upload" 
               />
               
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium">Voice Transcription (Speech-to-Text)</label>
-                <button
-                  onClick={toggleRecording}
-                  className={`text-xs px-2 py-1 rounded-md text-white transition-colors flex items-center ${
-                    isRecording ? 'bg-red-500 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-500'
-                  }`}
-                >
-                  {isRecording ? "🔴 Recording..." : "🎙️ Speak"}
-                </button>
-              </div>
-              
-              <textarea
-                value={transcription}
-                onChange={(e) => setTranscription(e.target.value)}
-                rows={3}
-                className="w-full border border-gray-200 rounded-md p-2 text-sm"
-                placeholder="Click the microphone button to dictate a voice note..."
-              />
-              
-              <div className="mt-2 text-xs">
-                {location ? (
-                  <div className="text-green-600">📍 Lat: {location.lat.toFixed(4)}, Lng: {location.lng.toFixed(4)}</div>
-                ) : (
-                  <div className="text-gray-500">Location not captured yet.</div>
-                )}
-                {locationError && <div className="text-red-500 mt-1">⚠️ {locationError}</div>}
+              <div className="flex flex-col gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg shadow-inner">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-semibold text-slate-700">Voice Transcription</label>
+                    {isRecording && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>}
+                  </div>
+                  <button
+                    onClick={toggleRecording}
+                    className={`text-xs px-3 py-1.5 rounded-full font-medium shadow-sm transition-all flex items-center gap-1.5 ${
+                      isRecording ? 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-600' : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    }`}
+                  >
+                    {isRecording ? "🛑 Stop" : "🎙️ Start Recording"}
+                  </button>
+                </div>
+                
+                {/* Visualizer Canvas */}
+                <div className={`w-full overflow-hidden transition-all duration-300 ${isRecording ? 'h-16 opacity-100' : 'h-0 opacity-0'}`}>
+                  <canvas ref={canvasRef} className="w-full h-16 rounded bg-slate-100 border-b border-slate-200" width={400} height={64}></canvas>
+                </div>
+                
+                {/* Live Preview Window */}
+                <div className="relative mt-2">
+                  <div className="absolute top-0 right-0 px-2 py-1 text-[10px] uppercase font-bold text-slate-400 bg-white rounded-bl-md border-b border-l border-slate-200">
+                    Live Preview
+                  </div>
+                  <div className="w-full min-h-[5rem] bg-white border border-slate-200 rounded-md p-3 text-sm leading-relaxed max-h-40 overflow-y-auto">
+                    {transcription === '' && interimTranscription === '' && !isRecording ? (
+                      <span className="text-slate-400 italic">Click "Start Recording" to dictate a voice note...</span>
+                    ) : (
+                      <>
+                        <span className="text-slate-800">{transcription}</span>
+                        {interimTranscription && (
+                          <span className="text-indigo-500 italic bg-indigo-50 px-1 rounded ml-1 animate-pulse">
+                            {interimTranscription}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -271,14 +408,14 @@ export default function Uploads(): React.ReactElement {
               <button 
                 onClick={uploadFile} 
                 disabled={!selectedFile || uploading}
-                className="w-full h-9 px-3 rounded-md bg-green-600 text-white text-sm font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="w-full h-10 rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:bg-slate-300 disabled:text-slate-500 shadow-sm transition-all disabled:cursor-not-allowed"
               >
-                {uploading ? `Uploading... ${uploadProgress}%` : 'Complete Upload'}
+                {uploading ? `Uploading... ${uploadProgress}%` : 'Upload with Metadata'}
               </button>
               {uploading && (
-                <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+                <div className="mt-2 w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                   <div 
-                    className="bg-green-600 h-2 rounded-full transition-all duration-300" 
+                    className="bg-green-500 h-1.5 rounded-full transition-all duration-300" 
                     style={{ width: `${uploadProgress}%` }}
                   ></div>
                 </div>
@@ -302,50 +439,63 @@ export default function Uploads(): React.ReactElement {
                 const isAudio = t.startsWith('audio/') || t === 'audio';
                 const mediaSrc = upload.fileUrl || upload.mediaUrl;
                 return (
-                  <li key={upload._id} className="py-3 flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="text-sm font-medium">{upload.note || 'No text note'}</div>
-                      <div className="text-xs text-gray-500 mb-2">
-                        {(t || 'file').toUpperCase()} • {upload.user?.code || 'Unknown Rep'}
-                        {upload.coords?.lat != null && upload.coords?.lng != null
-                          ? ` • 📍 (${Number(upload.coords.lat).toFixed(4)}, ${Number(upload.coords.lng).toFixed(4)})`
-                          : null}
+                  <li key={upload._id} className="py-4 flex flex-col md:flex-row md:items-start justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-800">{upload.note || 'No textual note provided'}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 mr-2">
+                            {(t || 'file').toUpperCase()}
+                          </span>
+                          Uploaded by <span className="font-medium text-slate-700">{upload.user?.code || 'Unknown Rep'}</span>
+                          {upload.coords?.lat != null && upload.coords?.lng != null
+                            ? ` • 📍 Location: (${Number(upload.coords.lat).toFixed(4)}, ${Number(upload.coords.lng).toFixed(4)})`
+                            : null}
+                        </div>
                       </div>
 
                       {upload.transcription && (
-                        <div className="mt-2 p-3 bg-blue-50/50 border border-blue-100 rounded-md text-sm">
-                          <div className="font-semibold text-blue-900 mb-1 flex items-center gap-1">🎙️ Transcription:</div>
-                          <p className="text-blue-800">&quot;{upload.transcription}&quot;</p>
+                        <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg shadow-sm">
+                          <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <span className="text-sm">🎙️</span> Voice Transcription Transcript
+                          </div>
+                          <p className="text-indigo-800 text-sm italic leading-relaxed">&quot;{upload.transcription}&quot;</p>
                           {upload.translation && (
                             <>
-                              <div className="font-semibold text-blue-900 mt-2 flex items-center gap-1">🌍 Translation:</div>
-                              <p className="text-blue-800">&quot;{upload.translation}&quot;</p>
+                              <div className="text-xs font-bold text-indigo-900 uppercase tracking-wider mt-3 mb-1 flex items-center gap-1">
+                                <span className="text-sm">🌍</span> Translation
+                              </div>
+                              <p className="text-indigo-800 text-sm leading-relaxed">&quot;{upload.translation}&quot;</p>
                             </>
                           )}
                         </div>
                       )}
 
                       {mediaSrc && (
-                        <div className="mt-3">
+                        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 w-full md:max-w-md">
                           {isImage && (
-                            <img src={mediaSrc} alt="Upload" className="h-32 object-cover rounded-md border" />
+                            <img src={mediaSrc} alt="Upload" className="w-full h-auto object-cover max-h-64" />
                           )}
                           {isVideo && (
-                            <video src={mediaSrc} controls className="h-40 rounded-md bg-black" />
+                            <video src={mediaSrc} controls className="w-full bg-black max-h-64" />
                           )}
                           {isAudio && (
-                            <audio src={mediaSrc} controls className="w-full max-w-sm" />
+                            <div className="p-3">
+                              <audio src={mediaSrc} controls className="w-full" />
+                            </div>
                           )}
                           {!isImage && !isVideo && !isAudio && (
-                            <a href={mediaSrc} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
-                              Open file
-                            </a>
+                            <div className="p-3">
+                              <a href={mediaSrc} target="_blank" rel="noreferrer" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 inline-flex items-center gap-1">
+                                <span>📄</span> Open attachment in new tab
+                              </a>
+                            </div>
                           )}
                         </div>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500 whitespace-nowrap">
-                      {upload.createdAt ? new Date(upload.createdAt).toLocaleDateString() : '—'}
+                    <div className="text-xs font-medium text-slate-400 whitespace-nowrap bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
+                      {upload.createdAt ? new Date(upload.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                     </div>
                   </li>
                 );
