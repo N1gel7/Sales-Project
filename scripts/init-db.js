@@ -1,14 +1,17 @@
 import 'dotenv/config'; // Load env vars FIRST
-import { getDbPool } from '../api/_lib/db.js';
 import bcrypt from 'bcryptjs';
+import { Pool } from 'pg';
 
 async function initDB() {
-  const pool = getDbPool();
-  
   if (!process.env.DATABASE_URL) {
     console.error('❌ DATABASE_URL is required to initialize the database.');
     process.exit(1);
   }
+
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
 
   console.log('Connecting to database...');
   
@@ -110,6 +113,10 @@ async function initDB() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_to VARCHAR(255)`);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_subject VARCHAR(255)`);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_message TEXT`);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP WITH TIME ZONE`);
 
     // ─────────────────────────────────────────────
     // 6. Uploads
@@ -294,6 +301,7 @@ async function initDB() {
   } catch (error) {
     console.error('❌ Database Initialization failed:', error);
   } finally {
+    await pool.end();
     process.exit(0);
   }
 }

@@ -61,10 +61,12 @@ async function loadRoutes(dir, basePath = '/api') {
             console.log(`✅ Emulated Serverless Route: ${routePath}/:id/comments`);
             console.log(`✅ Emulated Serverless Route: ${routePath}/:id`);
           }
-          if (routeName === 'chats') {
-            app.all(`${routePath}/:id/messages`, run);
+          if (routeName === 'invoices') {
+            app.all(`${routePath}/:id/pdf`, run);
+            app.all(`${routePath}/:id/email`, run);
             app.all(`${routePath}/:id`, run);
-            console.log(`✅ Emulated Serverless Route: ${routePath}/:id/messages`);
+            console.log(`✅ Emulated Serverless Route: ${routePath}/:id/pdf`);
+            console.log(`✅ Emulated Serverless Route: ${routePath}/:id/email`);
             console.log(`✅ Emulated Serverless Route: ${routePath}/:id`);
           }
           app.all(routePath, run);
