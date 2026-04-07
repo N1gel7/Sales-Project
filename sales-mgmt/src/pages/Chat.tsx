@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   MessageCircle, 
   Send, 
@@ -6,9 +6,6 @@ import {
   Users, 
   Search, 
   MoreVertical,
-  Paperclip,
-  Phone,
-  Video,
   X
 } from 'lucide-react';
 
@@ -62,6 +59,22 @@ interface Chat {
   messages?: Message[];
 }
 
+interface Typer {
+  id: string;
+  name: string;
+}
+
+// ─── Polling intervals ────────────────────────────────────────
+const MESSAGE_POLL_MS = 3000;
+const CHAT_LIST_POLL_MS = 10000;
+const TYPING_POLL_MS = 2000;
+const TYPING_DEBOUNCE_MS = 2000;
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export default function ChatPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
@@ -76,12 +89,22 @@ export default function ChatPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showParticipants, setShowParticipants] = useState(false);
+  const [typers, setTypers] = useState<Typer[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isAtBottomRef = useRef(true);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
+  // ── Track whether user is scrolled to bottom ─────────────────
+  const handleScroll = useCallback(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }, []);
+
+  // ── Current user from localStorage ───────────────────────────
   useEffect(() => {
-    // Get current user ID from localStorage
     const userInfo = localStorage.getItem('user_info');
     if (userInfo) {
       try {
@@ -91,44 +114,81 @@ export default function ChatPage() {
         console.error('Failed to parse user info:', error);
       }
     }
-    
     loadChats();
     loadUsers();
   }, []);
 
+  // ── Scroll to bottom on new messages (only if user was at bottom) ──
+  useEffect(() => {
+    if (isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  // ── Load on chat selection ───────────────────────────────────
   useEffect(() => {
     if (selectedChat) {
       loadMessages(selectedChat._id);
+      isAtBottomRef.current = true;
     }
+    setTypers([]);
   }, [selectedChat]);
 
+  // ── POLLING: Chat list (every 10s) ───────────────────────────
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const interval = setInterval(() => {
+      loadChats(true);
+    }, CHAT_LIST_POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
 
-  async function loadChats() {
+  // ── POLLING: Messages (every 3s when chat is open) ───────────
+  useEffect(() => {
+    if (!selectedChat) return;
+    const chatId = selectedChat._id;
+
+    const interval = setInterval(() => {
+      pollMessages(chatId);
+    }, MESSAGE_POLL_MS);
+
+    return () => clearInterval(interval);
+  }, [selectedChat]);
+
+  // ── POLLING: Typing indicators (every 2s when chat is open) ──
+  useEffect(() => {
+    if (!selectedChat) return;
+    const chatId = selectedChat._id;
+
+    const interval = setInterval(() => {
+      pollTyping(chatId);
+    }, TYPING_POLL_MS);
+
+    return () => clearInterval(interval);
+  }, [selectedChat]);
+
+  // ── Cleanup typing timeout on unmount ────────────────────────
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
+  }, []);
+
+  // ── Data fetchers ────────────────────────────────────────────
+  async function loadChats(silent = false) {
     try {
-      const response = await fetch('/api/chats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
+      const response = await fetch('/api/chats', { headers: getAuthHeaders() });
       const data = await response.json();
       setChats(data);
     } catch (error) {
       console.error('Failed to load chats:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
   async function loadUsers() {
     try {
-      const response = await fetch('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
+      const response = await fetch('/api/users', { headers: getAuthHeaders() });
       const data = await response.json();
       setUsers(data);
     } catch (error) {
@@ -138,11 +198,7 @@ export default function ChatPage() {
 
   async function loadMessages(chatId: string) {
     try {
-      const response = await fetch(`/api/chats/${chatId}/messages`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
+      const response = await fetch(`/api/chats/${chatId}/messages`, { headers: getAuthHeaders() });
       const data = await response.json();
       setMessages(data);
     } catch (error) {
@@ -150,28 +206,81 @@ export default function ChatPage() {
     }
   }
 
+  async function pollMessages(chatId: string) {
+    try {
+      const response = await fetch(`/api/chats/${chatId}/messages`, { headers: getAuthHeaders() });
+      if (!response.ok) return;
+      const data: Message[] = await response.json();
+
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m._id));
+        const newMsgs = data.filter((m) => !existingIds.has(m._id));
+        if (newMsgs.length === 0) return prev;
+        return [...prev, ...newMsgs];
+      });
+    } catch {
+      // silent fail on poll
+    }
+  }
+
+  async function pollTyping(chatId: string) {
+    try {
+      const response = await fetch(`/api/typing?chatId=${chatId}`, { headers: getAuthHeaders() });
+      if (!response.ok) return;
+      const data: Typer[] = await response.json();
+      setTypers(data);
+    } catch {
+      // silent fail
+    }
+  }
+
+  // ── Typing state management ──────────────────────────────────
+  function notifyTyping(isTyping: boolean) {
+    if (!selectedChat) return;
+    fetch('/api/typing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ chatId: selectedChat._id, isTyping }),
+    }).catch(() => {});
+  }
+
+  function handleInputChange(value: string) {
+    setMessageText(value);
+
+    // Debounced typing indicator
+    notifyTyping(true);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      notifyTyping(false);
+    }, TYPING_DEBOUNCE_MS);
+  }
+
+  // ── Send message ─────────────────────────────────────────────
   async function sendMessage() {
     if (!messageText.trim() || !selectedChat || sendingMessage) return;
+
+    // Clear typing indicator immediately
+    notifyTyping(false);
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
 
     setSendingMessage(true);
     try {
       const response = await fetch(`/api/chats/${selectedChat._id}/messages`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({
-          content: messageText,
-          type: 'text'
-        })
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ content: messageText, type: 'text' }),
       });
 
       if (response.ok) {
         const newMessage = await response.json();
-        setMessages(prev => [...prev, newMessage]);
+        setMessages((prev) => [...prev, newMessage]);
         setMessageText('');
-        loadChats(); // Refresh chat list to update last message
+        isAtBottomRef.current = true;
+        loadChats(true);
       }
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -189,20 +298,17 @@ export default function ChatPage() {
     try {
       const response = await fetch('/api/chats', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           name: newChatName,
           type: selectedUsers.length === 1 ? 'direct' : 'group',
-          participants: selectedUsers.map(userId => ({ user: userId }))
-        })
+          participants: selectedUsers.map((userId) => ({ user: userId })),
+        }),
       });
 
       if (response.ok) {
         const newChat = await response.json();
-        setChats(prev => [newChat, ...prev]);
+        setChats((prev) => [newChat, ...prev]);
         setShowNewChat(false);
         setNewChatName('');
         setSelectedUsers([]);
@@ -217,26 +323,27 @@ export default function ChatPage() {
     }
   }
 
-  function scrollToBottom() {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }
-
   function formatTime(timestamp: string) {
-    return new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   function getUnreadCount(_chat: Chat) {
-    // This would need to be calculated based on readBy status
     return 0; // Placeholder
   }
 
-  const filteredChats = chats.filter(chat =>
+  const filteredChats = chats.filter((chat) =>
     chat.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // ── Typing indicator text ────────────────────────────────────
+  function typingText(): string | null {
+    if (typers.length === 0) return null;
+    if (typers.length === 1) return `${typers[0].name} is typing`;
+    if (typers.length === 2) return `${typers[0].name} and ${typers[1].name} are typing`;
+    return `${typers[0].name} and ${typers.length - 1} others are typing`;
+  }
+
+  // ── Render ───────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -334,12 +441,6 @@ export default function ChatPage() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <button className="p-2 rounded-full hover:bg-gray-100">
-                    <Phone className="h-5 w-5 text-gray-600" />
-                  </button>
-                  <button className="p-2 rounded-full hover:bg-gray-100">
-                    <Video className="h-5 w-5 text-gray-600" />
-                  </button>
                   <button 
                     onClick={() => setShowParticipants(true)}
                     className="p-2 rounded-full hover:bg-gray-100"
@@ -351,62 +452,59 @@ export default function ChatPage() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div
+              ref={messagesContainerRef}
+              onScroll={handleScroll}
+              className="flex-1 overflow-y-auto p-4 space-y-4"
+            >
               {messages.map((message) => (
                 <div
                   key={message._id}
-                  className={`flex ${message.sender.id === currentUserId ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${message.sender?.id === currentUserId ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
                     className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      message.sender.id === currentUserId ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-900'
+                      message.sender?.id === currentUserId ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-900'
                     }`}
                   >
                     <div className="flex items-center space-x-2 mb-1">
                       <span className="text-xs font-medium">
-                        {message.sender.name}
+                        {message.sender?.name || 'Unknown'}
                       </span>
                       <span className="text-xs opacity-75">
                         {formatTime(message.createdAt)}
                       </span>
                     </div>
                     <p className="text-sm">{message.content}</p>
-                    {message.attachments && message.attachments.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {message.attachments.map((attachment, index) => (
-                          <div key={index} className="flex items-center space-x-2 text-xs">
-                            <Paperclip className="h-3 w-3" />
-                            <span>{attachment.filename}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
               ))}
+
+              {/* Typing Indicator */}
+              {typingText() && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-100 border border-gray-200 rounded-2xl px-4 py-2.5 flex items-center gap-2 shadow-sm">
+                    <div className="flex gap-1">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    </div>
+                    <span className="text-xs text-gray-500 italic ml-1">{typingText()}…</span>
+                  </div>
+                </div>
+              )}
+
               <div ref={messagesEndRef} />
             </div>
 
             {/* Message Input */}
             <div className="bg-white border-t border-gray-200 p-4">
               <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2 rounded-full hover:bg-gray-100"
-                >
-                  <Paperclip className="h-5 w-5 text-gray-600" />
-                </button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  multiple
-                />
                 <div className="flex-1">
                   <input
                     type="text"
                     value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
+                    onChange={(e) => handleInputChange(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                     placeholder="Type a message..."
                     className="w-full px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -508,7 +606,7 @@ export default function ChatPage() {
       {/* Participants Modal */}
       {showParticipants && selectedChat && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">Group Members</h3>
               <button
@@ -547,10 +645,86 @@ export default function ChatPage() {
                 </div>
               ))}
             </div>
+
+            {/* Add Members Section */}
+            {(() => {
+              const currentParticipantIds = new Set(
+                selectedChat.participants.map((p: any) => {
+                  const u = p.user;
+                  return typeof u === 'object' ? (u?._id || u?.id) : u;
+                })
+              );
+              const availableUsers = users.filter((u) => !currentParticipantIds.has(u._id));
+
+              if (availableUsers.length === 0) return null;
+
+              return (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">➕ Add Members</h4>
+                  <div className="max-h-36 overflow-y-auto border border-gray-200 rounded-lg">
+                    {availableUsers.map((user) => (
+                      <label key={user._id} className="flex items-center p-2.5 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(user._id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedUsers((prev) => [...prev, user._id]);
+                            } else {
+                              setSelectedUsers((prev) => prev.filter((id) => id !== user._id));
+                            }
+                          }}
+                          className="mr-3 h-4 w-4 rounded border-gray-300"
+                        />
+                        <div>
+                          <p className="text-sm font-medium">{user.name}</p>
+                          <p className="text-xs text-gray-500">{user.role}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  {selectedUsers.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(`/api/chats/${selectedChat._id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                            body: JSON.stringify({
+                              addParticipants: selectedUsers.map((uid) => ({
+                                user: uid,
+                                role: 'member',
+                                joinedAt: new Date().toISOString(),
+                              })),
+                            }),
+                          });
+                          if (response.ok) {
+                            const updated = await response.json();
+                            setSelectedChat({ ...selectedChat, participants: updated.participants || [] });
+                            setChats((prev) =>
+                              prev.map((c) => (c._id === selectedChat._id ? { ...c, participants: updated.participants || [] } : c))
+                            );
+                            setSelectedUsers([]);
+                          } else {
+                            const err = await response.json();
+                            alert('Failed: ' + (err.error || 'Unknown error'));
+                          }
+                        } catch (error) {
+                          alert('Failed to add members');
+                        }
+                      }}
+                      className="mt-3 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium"
+                    >
+                      Add {selectedUsers.length} member{selectedUsers.length !== 1 ? 's' : ''}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
             
             <div className="mt-6 pt-4 border-t border-gray-200">
               <button
-                onClick={() => setShowParticipants(false)}
+                onClick={() => { setShowParticipants(false); setSelectedUsers([]); }}
                 className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
               >
                 Close

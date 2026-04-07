@@ -6,7 +6,7 @@ async function handler(req, res) {
 
   try {
     const isMessages = url.includes('/messages') || req.query?.chatId;
-    const chatId = req.query?.chatId || url.match(/\/chats\/(\d+)\/messages/)?.[1];
+    const chatId = req.params?.id || req.query?.chatId || url.match(/\/chats\/([^/]+)\/messages/)?.[1];
 
     // ─── MESSAGES ───
     if (isMessages && chatId) {
@@ -109,6 +109,42 @@ async function handler(req, res) {
         _id: chat.id, name: chat.name, type: chat.type, participants: chat.participants, isActive: chat.is_active, createdAt: chat.created_at
       };
       return res.status(201).json(formatted);
+    }
+
+    if (method === 'PATCH') {
+      const chatId = req.params?.id || req.query?.chatId;
+      if (!chatId) return res.status(400).json({ error: 'Chat ID is required' });
+
+      let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const { addParticipants } = body || {};
+
+      if (!addParticipants || !Array.isArray(addParticipants) || addParticipants.length === 0) {
+        return res.status(400).json({ error: 'addParticipants array is required' });
+      }
+
+      // Fetch current chat
+      const { data: chat, error: fErr } = await supabase.from('chats').select('*').eq('id', chatId).single();
+      if (fErr) throw fErr;
+      if (!chat) return res.status(404).json({ error: 'Chat not found' });
+
+      // Merge participants (avoid duplicates by user id)
+      const existing = chat.participants || [];
+      const existingUserIds = new Set(existing.map(p => (typeof p.user === 'object' ? p.user : p.user)));
+      const newParticipants = addParticipants.filter(p => !existingUserIds.has(p.user));
+      const merged = [...existing, ...newParticipants];
+
+      const { data: updated, error: uErr } = await supabase
+        .from('chats')
+        .update({ participants: merged, updated_at: new Date().toISOString() })
+        .eq('id', chatId)
+        .select('*')
+        .single();
+      if (uErr) throw uErr;
+
+      return res.json({
+        _id: updated.id, name: updated.name, type: updated.type,
+        participants: updated.participants, isActive: updated.is_active
+      });
     }
 
     return res.status(200).json([]);
