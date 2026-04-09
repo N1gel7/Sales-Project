@@ -10,6 +10,7 @@ import {
   Activity,
   BarChart3
 } from 'lucide-react';
+import Chart from 'react-apexcharts';
 
 type DashboardStats = {
   taskStats: Record<string, number>;
@@ -408,30 +409,48 @@ export default function Dashboard(): React.ReactElement {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Product Performance */}
+        {/* Product Performance (Category Distribution) */}
         {(role === 'admin' || role === 'manager') && (
           <div className="card">
-            <div className="card-header">Top Products</div>
+            <div className="card-header">Category Distribution</div>
             <div className="card-body">
-              <div className="space-y-3">
-                {stats?.productPerformance?.slice(0, 5).map((product) => (
-                  <div key={product._id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Package className="h-4 w-4 text-gray-400" />
-                      <div>
-                        <p className="font-medium">{product._id}</p>
-                        <p className="text-xs text-gray-500">{product.count} sales</p>
-                      </div>
-                    </div>
-                    <span className="font-semibold text-green-600">
-                      {formatCurrency(product.revenue)}
-                    </span>
-                  </div>
-                ))}
-                {(!stats?.productPerformance || stats.productPerformance.length === 0) && (
-                  <p className="text-gray-500 text-center py-4">No product data available</p>
-                )}
-              </div>
+              {stats?.productPerformance && stats.productPerformance.length > 0 ? (
+                <div className="h-[300px] flex items-center justify-center">
+                  <Chart 
+                    options={{
+                      chart: { type: 'donut', fontFamily: 'Inter, sans-serif' },
+                      labels: stats.productPerformance.slice(0, 5).map(p => p._id),
+                      colors: ['#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899'],
+                      plotOptions: {
+                        pie: {
+                          donut: {
+                            size: '70%',
+                            labels: {
+                              show: true,
+                              name: { show: true },
+                              value: { 
+                                show: true, 
+                                formatter: (val) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(Number(val)) 
+                              }
+                            }
+                          }
+                        }
+                      },
+                      dataLabels: { enabled: false },
+                      legend: { position: 'bottom' },
+                      tooltip: {
+                        y: { formatter: (val) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(Number(val)) }
+                      }
+                    }}
+                    series={stats.productPerformance.slice(0, 5).map(p => p.revenue)}
+                    type="donut"
+                    width="100%"
+                    height="100%"
+                  />
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-4">No product data available</p>
+              )}
             </div>
           </div>
         )}
@@ -485,46 +504,69 @@ export default function Dashboard(): React.ReactElement {
         </div>
       </div>
 
-      {/* Daily Sales Trend */}
+      {/* Daily Sales Trend - ApexCharts */}
       {(role === 'admin') && (
-        <div className="card">
-          <div className="card-header">Sales Trend (Last 7 Days)</div>
+        <div className="card lg:col-span-2">
+          <div className="card-header">Revenue Trend (Last 7 Days)</div>
           <div className="card-body">
             {stats?.dailySales && stats.dailySales.length > 0 ? (
-              <div className="space-y-4">
-                {stats?.dailySales?.map((day, dayIdx) => {
-                  const y = day._id?.year;
-                  const mo = day._id?.month;
-                  const d = day._id?.day;
-                  const dateValid = y != null && mo != null && d != null;
-                  const maxRev = Math.max(...(stats?.dailySales?.map((x) => x.revenue) || [1]), 1);
-                  return (
-                    <div key={dateValid ? `${y}-${mo}-${d}` : `day-${dayIdx}`} className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
-                          {dateValid ? d : '—'}
-                        </div>
-                        <div>
-                          <p className="font-medium">
-                            {dateValid ? new Date(y, mo - 1, d).toLocaleDateString() : '—'}
-                          </p>
-                          <p className="text-xs text-gray-500">{day.count ?? 0} invoices</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-green-600">{formatCurrency(day.revenue ?? 0)}</p>
-                        <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
-                          <div
-                            className="bg-green-500 h-2 rounded-full"
-                            style={{
-                              width: `${Math.min(100, ((day.revenue ?? 0) / maxRev) * 100)}%`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="h-[350px]">
+                <Chart 
+                  options={{
+                    chart: {
+                      type: 'area',
+                      fontFamily: 'Inter, sans-serif',
+                      toolbar: { show: false },
+                      zoom: { enabled: false }
+                    },
+                    colors: ['#10b981'],
+                    fill: {
+                      type: 'gradient',
+                      gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.4,
+                        opacityTo: 0.05,
+                        stops: [0, 90, 100]
+                      }
+                    },
+                    dataLabels: { enabled: false },
+                    stroke: { curve: 'smooth', width: 3 },
+                    xaxis: {
+                      categories: stats.dailySales.map(day => {
+                        const { year, month, day: d } = day._id;
+                        return year != null && month != null && d != null 
+                          ? new Date(year, month - 1, d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })
+                          : 'Unknown';
+                      }),
+                      axisBorder: { show: false },
+                      axisTicks: { show: false }
+                    },
+                    yaxis: {
+                      labels: {
+                        formatter: (value) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', minimumFractionDigits: 0 }).format(value)
+                      }
+                    },
+                    grid: {
+                      borderColor: '#f3f4f6',
+                      strokeDashArray: 4,
+                      yaxis: { lines: { show: true } },
+                      xaxis: { lines: { show: false } }
+                    },
+                    tooltip: {
+                      theme: 'light',
+                      y: {
+                        formatter: (value) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(value)
+                      }
+                    }
+                  }}
+                  series={[{
+                    name: 'Revenue',
+                    data: stats.dailySales.map(day => day.revenue ?? 0)
+                  }]}
+                  type="area"
+                  width="100%"
+                  height="100%"
+                />
               </div>
             ) : (
               <p className="text-gray-500 text-center py-8">No sales data for the selected period</p>

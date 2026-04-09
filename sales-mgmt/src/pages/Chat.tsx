@@ -463,19 +463,48 @@ export default function ChatPage() {
                   className={`flex ${message.sender?.id === currentUserId ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                      message.sender?.id === currentUserId ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-900'
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                      message.sender?.id === currentUserId 
+                        ? 'bg-blue-600 text-white rounded-br-sm shadow-sm' 
+                        : 'bg-white text-gray-900 rounded-bl-sm border border-gray-200 shadow-sm'
                     }`}
                   >
-                    <div className="flex items-center space-x-2 mb-1">
-                      <span className="text-xs font-medium">
-                        {message.sender?.name || 'Unknown'}
-                      </span>
-                      <span className="text-xs opacity-75">
+                    {message.sender?.id !== currentUserId && (
+                      <div className="flex items-center space-x-2 mb-1.5">
+                        <span className="text-xs font-semibold text-blue-600">
+                          {message.sender?.name || 'Unknown'}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {formatTime(message.createdAt)}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Attachments rendering */}
+                    {message.attachments && message.attachments.length > 0 && (
+                      <div className="mb-2 grid gap-1 grid-cols-2">
+                        {message.attachments.map((att, i) => (
+                          <div key={i} className="relative group rounded-xl overflow-hidden border border-black/10">
+                            {att.type.startsWith('image/') ? (
+                              <img src={att.url} alt="attachment" className="w-full h-32 object-cover hover:scale-105 transition-transform" />
+                            ) : (
+                              <div className="w-full h-32 bg-gray-50 flex flex-col items-center justify-center text-gray-500">
+                                <Plus className="h-6 w-6 mb-1" />
+                                <span className="text-[10px] truncate px-2">{att.filename}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-[15px] leading-relaxed">{message.content}</p>
+                    
+                    {message.sender?.id === currentUserId && (
+                      <div className="flex justify-end mt-1 text-[10px] text-blue-200">
                         {formatTime(message.createdAt)}
-                      </span>
-                    </div>
-                    <p className="text-sm">{message.content}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -499,15 +528,18 @@ export default function ChatPage() {
 
             {/* Message Input */}
             <div className="bg-white border-t border-gray-200 p-4">
-              <div className="flex items-center space-x-2">
-                <div className="flex-1">
+              <div className="flex items-end space-x-2">
+                <button className="p-2.5 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors border border-gray-200 flex-shrink-0">
+                  <Plus className="h-5 w-5" />
+                </button>
+                <div className="flex-1 bg-gray-50 border border-gray-200 rounded-3xl pb-2 pt-2 px-4 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
                   <input
                     type="text"
                     value={messageText}
                     onChange={(e) => handleInputChange(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Type a message..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Message..."
+                    className="w-full bg-transparent focus:outline-none text-[15px]"
                   />
                 </div>
                 <button

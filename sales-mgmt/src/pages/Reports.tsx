@@ -340,30 +340,41 @@ export default function ReportsPage() {
 
             {/* Attachments Preview */}
             {report.attachments.length > 0 && (
-              <div className="p-4">
-                <div className="grid grid-cols-2 gap-2">
-                  {report.attachments.slice(0, 4).map((attachment, index) => (
-                    <div key={index} className="relative group">
-                      {attachment.type.startsWith('image/') ? (
+              <div className={report.type === 'mood_board' ? '' : 'p-4'}>
+                <div className={
+                  report.type === 'mood_board' 
+                    ? `grid ${report.attachments.length === 1 ? 'grid-cols-1' : report.attachments.length === 2 ? 'grid-cols-2' : 'grid-cols-2'} gap-0.5`
+                    : 'grid grid-cols-2 gap-2'
+                }>
+                  {report.attachments.slice(0, report.type === 'mood_board' ? 4 : 4).map((attachment, index) => (
+                    <div key={index} className={`relative group ${report.type === 'mood_board' && index === 0 && report.attachments.length === 3 ? 'col-span-2' : ''}`}>
+                      {attachment.type.startsWith('image/') || attachment.type.startsWith('video/') ? (
                         <img
                           src={attachment.thumbnail || attachment.url}
                           alt={attachment.filename}
-                          className="w-full h-20 object-cover rounded border border-gray-200"
+                          className={
+                            report.type === 'mood_board'
+                              ? `w-full object-cover transition-transform duration-500 group-hover:scale-105 ${report.attachments.length === 1 ? 'h-64' : 'h-32'}`
+                              : 'w-full h-20 object-cover rounded border border-gray-200'
+                          }
                         />
                       ) : (
-                        <div className="w-full h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                        <div className={`w-full bg-gray-100 flex items-center justify-center ${report.type === 'mood_board' ? 'h-32' : 'h-20 rounded border border-gray-200'}`}>
                           {getAttachmentIcon(attachment.type)}
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className={`absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${report.type !== 'mood_board' ? 'rounded' : ''}`}>
                         <Eye className="h-4 w-4 text-white" />
                       </div>
                     </div>
                   ))}
                   {report.attachments.length > 4 && (
-                    <div className="w-full h-20 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
-                      <span className="text-sm text-gray-500">
-                        +{report.attachments.length - 4} more
+                    <div className={`w-full bg-gray-100 flex items-center justify-center relative group overflow-hidden ${report.type === 'mood_board' ? 'h-32' : 'h-20 rounded border border-gray-200'}`}>
+                      {report.type === 'mood_board' && report.attachments[4]?.type.startsWith('image/') && (
+                        <img src={report.attachments[4].thumbnail || report.attachments[4].url} className="absolute inset-0 w-full h-full object-cover opacity-40 blur-sm" />
+                      )}
+                      <span className="text-sm font-semibold text-gray-700 relative z-10 bg-white/80 px-2 py-1 rounded">
+                        +{report.attachments.length - (report.type === 'mood_board' ? 3 : 4)} more
                       </span>
                     </div>
                   )}
