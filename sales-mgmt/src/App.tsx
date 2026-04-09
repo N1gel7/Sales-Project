@@ -194,7 +194,9 @@ function App(): React.ReactElement {
                   )}
                   <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" />
                   <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" />
-                  <SideLink to="/map" icon={<Map size={20} />} label="Map" />
+                  {(role === 'admin' || role === 'manager') && (
+                    <SideLink to="/map" icon={<Map size={20} />} label="Map" />
+                  )}
                 </nav>
                 <div className="p-4 border-t border-gray-100">
                   <div className="text-xs text-gray-500 mb-2">Version 0.1.0</div>
@@ -243,7 +245,9 @@ function App(): React.ReactElement {
               )}
               <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" />
               <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" />
-              <SideLink to="/map" icon={<Map size={20} />} label="Map" />
+              {(role === 'admin' || role === 'manager') && (
+                <SideLink to="/map" icon={<Map size={20} />} label="Map" />
+              )}
             </nav>
             <div className="p-4 border-t border-gray-100 bg-gray-50">
 
@@ -317,7 +321,7 @@ function App(): React.ReactElement {
               <Route path="/chat" element={<RequireAuth roles={["sales", "manager", "admin"]}><Chat /></RequireAuth>} />
               <Route path="/reports" element={<RequireAuth roles={["sales", "manager", "admin"]}><Reports /></RequireAuth>} />
               <Route path="/users" element={<RequireAuth roles={["admin"]}><Users /></RequireAuth>} />
-              <Route path="/map" element={<RequireAuth><MapViewSimple /></RequireAuth>} />
+              <Route path="/map" element={<RequireAuth roles={["admin", "manager"]}><MapViewSimple /></RequireAuth>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>

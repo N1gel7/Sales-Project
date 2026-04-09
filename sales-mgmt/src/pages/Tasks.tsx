@@ -5,8 +5,8 @@ type Task = {
   _id: string;
   title: string;
   description?: string;
-  assignee: { id: string; name: string; code: string; email: string };
-  createdBy: { id: string; name: string; code: string; email: string };
+  assignee: { id: string; name: string; code: string; email: string } | null;
+  createdBy: { id: string; name: string; code: string; email: string } | null;
   status: 'pending' | 'in_progress' | 'completed' | 'overdue' | 'cancelled';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   category: string;
@@ -66,7 +66,7 @@ export default function Tasks(): React.ReactElement {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
       });
       const data = await response.json();
-      setTasks(data);
+      setTasks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load tasks:', error);
     } finally {
@@ -352,7 +352,9 @@ export default function Tasks(): React.ReactElement {
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <div className="flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        {task.assignee.name} ({task.assignee.code})
+                        {task.assignee
+                          ? `${task.assignee.name} (${task.assignee.code})`
+                          : 'Unassigned'}
                       </div>
                       {task.dueAt && (
                         <div className="flex items-center gap-1">
@@ -371,9 +373,9 @@ export default function Tasks(): React.ReactElement {
                         {new Date(task.createdAt).toLocaleDateString()}
                       </div>
                     </div>
-                    {task.comments.length > 0 && (
+                    {(task.comments?.length ?? 0) > 0 && (
                       <div className="mt-2 text-xs text-gray-500">
-                        {task.comments.length} comment{task.comments.length !== 1 ? 's' : ''}
+                        {task.comments!.length} comment{task.comments!.length !== 1 ? 's' : ''}
                       </div>
                     )}
                   </div>
@@ -530,11 +532,19 @@ export default function Tasks(): React.ReactElement {
                 </div>
                 <div>
                   <span className="font-medium">Assignee:</span>
-                  <span className="ml-2">{selectedTask.assignee.name} ({selectedTask.assignee.code})</span>
+                  <span className="ml-2">
+                    {selectedTask.assignee
+                      ? `${selectedTask.assignee.name} (${selectedTask.assignee.code})`
+                      : 'Unassigned'}
+                  </span>
                 </div>
                 <div>
                   <span className="font-medium">Created by:</span>
-                  <span className="ml-2">{selectedTask.createdBy.name} ({selectedTask.createdBy.code})</span>
+                  <span className="ml-2">
+                    {selectedTask.createdBy
+                      ? `${selectedTask.createdBy.name} (${selectedTask.createdBy.code})`
+                      : '—'}
+                  </span>
                 </div>
                 {selectedTask.dueAt && (
                   <div>
@@ -561,7 +571,7 @@ export default function Tasks(): React.ReactElement {
               <div>
                 <h3 className="font-medium mb-2">Comments</h3>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {selectedTask.comments.map((comment, index) => (
+                  {(selectedTask.comments || []).map((comment, index) => (
                     <div key={index} className="bg-gray-50 p-3 rounded-md">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm">{comment.author.name}</span>
@@ -573,7 +583,7 @@ export default function Tasks(): React.ReactElement {
                       <p className="text-sm">{comment.text}</p>
                     </div>
                   ))}
-                  {selectedTask.comments.length === 0 && (
+                  {(selectedTask.comments || []).length === 0 && (
                     <p className="text-sm text-gray-500">No comments yet</p>
                   )}
                 </div>

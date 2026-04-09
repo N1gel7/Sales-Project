@@ -44,10 +44,9 @@ async function loadRoutes(dir, basePath = '/api') {
         const serverlessHandler = module.default;
         
         if (serverlessHandler) {
-          app.all(routePath, async (req, res) => {
+          const run = async (req, res) => {
             try {
-              req.query = req.query || {}; 
-              // Route incoming HTTP traffic dynamically into your purely serverless functions
+              req.query = req.query || {};
               await serverlessHandler(req, res);
             } catch (err) {
               console.error(`Error in Server Emulator [${routePath}]:`, err);
@@ -55,7 +54,22 @@ async function loadRoutes(dir, basePath = '/api') {
                 res.status(500).json({ error: 'Internal Server Error' });
               }
             }
-          });
+          };
+          if (routeName === 'tasks') {
+            app.all(`${routePath}/:id/comments`, run);
+            app.all(`${routePath}/:id`, run);
+            console.log(`✅ Emulated Serverless Route: ${routePath}/:id/comments`);
+            console.log(`✅ Emulated Serverless Route: ${routePath}/:id`);
+          }
+          if (routeName === 'invoices') {
+            app.all(`${routePath}/:id/pdf`, run);
+            app.all(`${routePath}/:id/email`, run);
+            app.all(`${routePath}/:id`, run);
+            console.log(`✅ Emulated Serverless Route: ${routePath}/:id/pdf`);
+            console.log(`✅ Emulated Serverless Route: ${routePath}/:id/email`);
+            console.log(`✅ Emulated Serverless Route: ${routePath}/:id`);
+          }
+          app.all(routePath, run);
           console.log(`✅ Emulated Serverless Route: ${routePath}`);
         }
       } catch (err) {

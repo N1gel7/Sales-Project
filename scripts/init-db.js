@@ -1,14 +1,17 @@
 import 'dotenv/config'; // Load env vars FIRST
-import { getDbPool } from '../api/_lib/db.js';
 import bcrypt from 'bcryptjs';
+import { Pool } from 'pg';
 
 async function initDB() {
-  const pool = getDbPool();
-  
   if (!process.env.DATABASE_URL) {
     console.error('❌ DATABASE_URL is required to initialize the database.');
     process.exit(1);
   }
+
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
 
   console.log('Connecting to database...');
   
@@ -85,10 +88,12 @@ async function initDB() {
         category VARCHAR(255),
         due_at TIMESTAMP WITH TIME ZONE,
         comments JSONB DEFAULT '[]',
+        location JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS location JSONB`);
 
     // ─────────────────────────────────────────────
     // 5. Invoices
@@ -108,6 +113,10 @@ async function initDB() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_to VARCHAR(255)`);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_subject VARCHAR(255)`);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_message TEXT`);
+    await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP WITH TIME ZONE`);
 
     // ─────────────────────────────────────────────
     // 6. Uploads
@@ -131,6 +140,8 @@ async function initDB() {
 
     // ─────────────────────────────────────────────
     // 7. Activity Logs
+    // Tracks global system events for auditing and
+    // dashboard activity feeds.
     // ─────────────────────────────────────────────
     console.log('Creating activity_logs table...');
     await pool.query(`
@@ -145,6 +156,14 @@ async function initDB() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Performance indexes for activity_logs —
+    // speeds up: feed queries (actor + time), type filters, and ref lookups
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_id    ON activity_logs (actor_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_type         ON activity_logs (type)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_ref_id       ON activity_logs (ref_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at   ON activity_logs (created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_time   ON activity_logs (actor_id, created_at DESC)`);
 
     // ─────────────────────────────────────────────
     // 8. Chats
@@ -221,6 +240,26 @@ async function initDB() {
     `);
 
     // ─────────────────────────────────────────────
+    // Performance Indexes (Analytics)
+    // Speeds up SQL GROUP BY aggregations used by
+    // the /api/analytics/* endpoints.
+    // ─────────────────────────────────────────────
+    console.log('Creating analytics performance indexes...');
+    // invoices: date-range grouping and rep attribution
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created_at  ON invoices (created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created_by  ON invoices (created_by)`);
+    // tasks: status filtering and per-assignee completion queries
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_status          ON tasks (status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id     ON tasks (assignee_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_tasks_assignee_status ON tasks (assignee_id, status)`);
+    console.log('✅ Analytics indexes created.');
+
+    console.log('\n💡 Next step: run   node scripts/setup-analytics-rpc.js');
+    console.log('   This registers the SQL RPC functions (get_daily_sales, get_monthly_sales,');
+    console.log('   get_task_completion_rates, get_product_performance) used by /api/analytics/*.');
+    console.log('   Without it, the endpoints fall back to JavaScript aggregation automatically.\n');
+
+    // ─────────────────────────────────────────────
     // Seed Initial Users
     // ─────────────────────────────────────────────
     const adminExists = await pool.query('SELECT 1 FROM users WHERE email = $1', ['admin@example.com']);
@@ -262,6 +301,7 @@ async function initDB() {
   } catch (error) {
     console.error('❌ Database Initialization failed:', error);
   } finally {
+    await pool.end();
     process.exit(0);
   }
 }

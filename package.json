@@ -277,7 +277,9 @@
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "frontend": "cd sales-mgmt && npm run dev",
     "backend": "node server.js",
-    "db:init": "node scripts/init-db.js"
+    "db:init": "node scripts/init-db.js",
+    "db:analytics": "node scripts/setup-analytics-rpc.js",
+    "db:migrate": "npm run db:init && npm run db:analytics"
   },
   "repository": {
     "type": "git",
