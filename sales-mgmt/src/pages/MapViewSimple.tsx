@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { getLocationLabel } from '../utils/locationLabel';
 
 declare global {
   interface Window {
@@ -34,7 +35,7 @@ function getMediaCategory(type: string | null): string {
   return 'other';
 }
 
-function buildPopupHtml(upload: UploadItem): string {
+function buildPopupHtml(upload: UploadItem, locationLabel?: string | null): string {
   const cat = getMediaCategory(upload.type);
   const cfg = MEDIA_CONFIG[cat];
   const mediaSrc = upload.fileUrl || '';
@@ -91,8 +92,8 @@ function buildPopupHtml(upload: UploadItem): string {
             <div style="font-size:10px;color:#94a3b8;">${upload.user?.code || ''}</div>
           </div>
         </div>
-        <div style="font-size:10px;color:#94a3b8;">
-          📍 ${upload.coords?.lat?.toFixed(4)}, ${upload.coords?.lng?.toFixed(4)}
+        <div style="font-size:10px;color:#94a3b8;max-width:120px;text-align:right;">
+          📍 ${locationLabel ? `${locationLabel} (` : ''}${upload.coords?.lat?.toFixed(4)}, ${upload.coords?.lng?.toFixed(4)}${locationLabel ? ')' : ''}
         </div>
       </div>
     </div>
@@ -111,8 +112,8 @@ export default function MapViewSimple(): React.ReactElement {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const [filterImages, setFilterImages] = useState(true);
   const [filterVideos, setFilterVideos] = useState(true);
-  const [filterAudio, setFilterAudio] = useState(true);
   const [filterUser, setFilterUser] = useState('all');
+  const [locationLabels, setLocationLabels] = useState<Record<string, string | null>>({});
 
   // ── Fetch uploads ────────────────────────────────────────────
   const fetchUploads = useCallback(async () => {
@@ -199,7 +200,6 @@ export default function MapViewSimple(): React.ReactElement {
       const cat = getMediaCategory(u.type);
       if (cat === 'image' && !filterImages) return false;
       if (cat === 'video' && !filterVideos) return false;
-      if (cat === 'audio' && !filterAudio) return false;
       if (filterUser !== 'all' && (u.user?.code || 'Unknown') !== filterUser) return false;
       return true;
     });
@@ -232,7 +232,7 @@ export default function MapViewSimple(): React.ReactElement {
         }),
       });
 
-      marker.bindPopup(buildPopupHtml(upload), {
+      marker.bindPopup(buildPopupHtml(upload, locationLabels[upload._id]), {
         maxWidth: 280,
         className: 'upload-popup',
       });
@@ -245,7 +245,17 @@ export default function MapViewSimple(): React.ReactElement {
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     }
-  }, [uploads, filterImages, filterVideos, filterAudio, filterUser]);
+  }, [uploads, filterImages, filterVideos, filterUser, locationLabels]);
+
+  useEffect(() => {
+    const candidates = uploads.filter((u) => u.coords?.lat != null && u.coords?.lng != null);
+    candidates.forEach((u) => {
+      if (locationLabels[u._id] !== undefined) return;
+      getLocationLabel(Number(u.coords!.lat), Number(u.coords!.lng)).then((label) => {
+        setLocationLabels((prev) => ({ ...prev, [u._id]: label }));
+      });
+    });
+  }, [uploads, locationLabels]);
 
   // ── Locate user ──────────────────────────────────────────────
   const locateUser = useCallback(() => {
@@ -304,7 +314,6 @@ export default function MapViewSimple(): React.ReactElement {
     const cat = getMediaCategory(u.type);
     if (cat === 'image' && !filterImages) return false;
     if (cat === 'video' && !filterVideos) return false;
-    if (cat === 'audio' && !filterAudio) return false;
     if (filterUser !== 'all' && (u.user?.code || 'Unknown') !== filterUser) return false;
     return true;
   }).length;
@@ -372,10 +381,10 @@ export default function MapViewSimple(): React.ReactElement {
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Filters</span>
 
             {/* Media type toggles */}
-            {(['image', 'video', 'audio'] as const).map((cat) => {
+            {(['image', 'video'] as const).map((cat) => {
               const cfg = MEDIA_CONFIG[cat];
-              const checked = cat === 'image' ? filterImages : cat === 'video' ? filterVideos : filterAudio;
-              const setter = cat === 'image' ? setFilterImages : cat === 'video' ? setFilterVideos : setFilterAudio;
+              const checked = cat === 'image' ? filterImages : filterVideos;
+              const setter = cat === 'image' ? setFilterImages : setFilterVideos;
               return (
                 <label key={cat} className="flex items-center gap-2 cursor-pointer select-none group">
                   <input
@@ -428,7 +437,9 @@ export default function MapViewSimple(): React.ReactElement {
         <div className="card-body py-3 px-5">
           <div className="flex flex-wrap items-center gap-4">
             <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Legend</span>
-            {Object.entries(MEDIA_CONFIG).map(([key, cfg]) => (
+            {Object.entries(MEDIA_CONFIG)
+              .filter(([key]) => key !== 'audio')
+              .map(([key, cfg]) => (
               <div key={key} className="flex items-center gap-2">
                 <span
                   className="inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-xs"

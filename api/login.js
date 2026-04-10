@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       .single();
 
     if (error || !user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Incorrect email or password' });
     }
 
     if (!user.active) {
@@ -44,7 +44,17 @@ export default async function handler(req, res) {
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     
     if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Incorrect email or password' });
+    }
+
+    // First login flow for admin-created users:
+    // reset_password_expires === 0 is used as "must change initial password".
+    if (Number(user.reset_password_expires) === 0) {
+      return res.status(200).json({
+        requiresPasswordChange: true,
+        message: 'Password change required before first login',
+        user: { id: user.id, email: user.email, name: user.name }
+      });
     }
 
     // Create tokenPayload
@@ -70,7 +80,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ 
       message: "Login successful",
       user: safeUser,
-      token: token 
+      token: token,
+      requiresPasswordChange: false
     });
 
   } catch (error) {

@@ -1,11 +1,21 @@
 import { http, axiosInstance } from './http';
 
-export type LoginResponse = { token: string; user: { id: string; name: string; email: string; role: string; code: string } };
+export type LoginResponse = {
+  token?: string;
+  requiresPasswordChange?: boolean;
+  user?: { id: string; name: string; email: string; role?: string; code?: string };
+};
 
 export const api = {
   // auth
   async login(email: string, password: string) {
     return http<LoginResponse>('/api/login', { method: 'POST', body: { email, password } });
+  },
+  async changeInitialPassword(email: string, currentPassword: string, newPassword: string) {
+    return http<LoginResponse>('/api/change-initial-password', {
+      method: 'POST',
+      body: { email, currentPassword, newPassword }
+    });
   },
   async signup(name: string, email: string, password: string, role?: string, code?: string) {
     return http<LoginResponse>('/api/signup', { method: 'POST', body: { name, email, password, role, code } });

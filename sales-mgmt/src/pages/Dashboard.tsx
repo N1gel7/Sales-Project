@@ -11,6 +11,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import Chart from 'react-apexcharts';
+import LocationText from '../components/LocationText';
 
 type DashboardStats = {
   taskStats: Record<string, number>;
@@ -103,7 +104,7 @@ export default function Dashboard(): React.ReactElement {
           headers: { 'Authorization': `Bearer ${token}` },
           signal: controller.signal
         }),
-        fetch('/api/dashboard/activity?limit=10', {
+        fetch('/api/dashboard/activity?limit=5', {
           headers: { 'Authorization': `Bearer ${token}` },
           signal: controller.signal
         })
@@ -478,17 +479,19 @@ export default function Dashboard(): React.ReactElement {
                 }
                 const latN = lat != null ? Number(lat) : NaN;
                 const lngN = lng != null ? Number(lng) : NaN;
-                const label =
-                  Number.isFinite(latN) && Number.isFinite(lngN)
-                    ? `${latN.toFixed(2)}, ${lngN.toFixed(2)}`
-                    : 'Unknown location';
                 const types = Array.isArray(location.types) ? location.types : [];
                 return (
                   <div key={Number.isFinite(latN) && Number.isFinite(lngN) ? `${latN}-${lngN}` : `loc-${idx}`} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <MapPin className="h-4 w-4 text-gray-400" />
                       <div>
-                        <p className="font-medium text-sm">{label}</p>
+                        <p className="font-medium text-sm">
+                          {Number.isFinite(latN) && Number.isFinite(lngN) ? (
+                            <LocationText lat={latN} lng={lngN} />
+                          ) : (
+                            'Unknown location'
+                          )}
+                        </p>
                         <p className="text-xs text-gray-500">{types.length ? types.join(', ') : '—'}</p>
                       </div>
                     </div>
@@ -581,7 +584,7 @@ export default function Dashboard(): React.ReactElement {
           <div className="card-header">Recent Activity</div>
           <div className="card-body">
             <div className="space-y-3">
-              {activities.map((activity) => (
+              {activities.slice(0, 5).map((activity) => (
                 <div key={activity._id || activity.timestamp} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
                   <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                     {activity.type === 'task' && <CheckCircle className="h-4 w-4 text-blue-600" />}

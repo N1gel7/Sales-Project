@@ -80,6 +80,14 @@ interface Report {
   updatedAt: string;
 }
 
+interface UploadOption {
+  _id: string;
+  filename: string;
+  type: string;
+  fileUrl: string | null;
+  createdAt: string;
+}
+
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,12 +98,17 @@ export default function ReportsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showAuthorDetails, setShowAuthorDetails] = useState(false);
   const [selectedAuthor, setSelectedAuthor] = useState<any>(null);
+  const [availableUploads, setAvailableUploads] = useState<UploadOption[]>([]);
+  const [loadingUploads, setLoadingUploads] = useState(false);
+  const [uploadSearchTerm, setUploadSearchTerm] = useState('');
 
   // New report form state
   const [newReport, setNewReport] = useState({
     title: '',
     description: '',
     type: 'mood_board' as const,
+    status: 'published' as const,
+    attachments: [] as Attachment[],
     tags: [] as string[],
     visibility: 'team' as const,
     location: { lat: 0, lng: 0, address: '' },
@@ -118,6 +131,12 @@ export default function ReportsPage() {
     loadReports();
   }, [filterType, filterStatus]);
 
+  useEffect(() => {
+    if (showCreateForm && availableUploads.length === 0 && !loadingUploads) {
+      loadUploadsForMoodBoard();
+    }
+  }, [showCreateForm]);
+
   async function loadReports() {
     try {
       const params = new URLSearchParams();
@@ -130,7 +149,14 @@ export default function ReportsPage() {
         }
       });
       const data = await response.json();
-      setReports(data);
+      const normalized = (Array.isArray(data) ? data : []).map((report: Report) => ({
+        ...report,
+        comments: Array.isArray(report.comments) ? report.comments : [],
+        likes: Array.isArray(report.likes) ? report.likes : [],
+        attachments: Array.isArray(report.attachments) ? report.attachments : [],
+        tags: Array.isArray(report.tags) ? report.tags : []
+      }));
+      setReports(normalized);
     } catch (error) {
       console.error('Failed to load reports:', error);
     } finally {
@@ -141,6 +167,10 @@ export default function ReportsPage() {
   async function createReport() {
     if (!newReport.title.trim()) {
       alert('Please enter a report title');
+      return;
+    }
+    if (newReport.type === 'mood_board' && newReport.attachments.length === 0) {
+      alert('Please add at least one attachment for a mood board');
       return;
     }
 
@@ -162,6 +192,8 @@ export default function ReportsPage() {
           title: '',
           description: '',
           type: 'mood_board',
+          status: 'published',
+          attachments: [],
           tags: [],
           visibility: 'team',
           location: { lat: 0, lng: 0, address: '' },
@@ -181,29 +213,80 @@ export default function ReportsPage() {
 
   async function toggleLike(reportId: string) {
     try {
-      const response = await fetch(`/api/reports/${reportId}/like`, {
-        method: 'POST',
+      const response = await fetch('/api/reports', {
+        method: 'PATCH',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
+        },
+        body: JSON.stringify({ reportId })
       });
 
       if (response.ok) {
-        const { liked } = await response.json();
-        setReports(prev => prev.map(report => 
-          report._id === reportId 
-            ? { 
-                ...report, 
-                likes: liked 
-                  ? [...report.likes, { user: currentUserId || '', likedAt: new Date().toISOString() }]
-                  : report.likes.filter(like => like.user !== currentUserId)
-              }
+        const { likes } = await response.json();
+        setReports(prev => prev.map(report =>
+          report._id === reportId
+            ? { ...report, likes: Array.isArray(likes) ? likes : [] }
             : report
         ));
       }
     } catch (error) {
       console.error('Failed to toggle like:', error);
     }
+  }
+
+  async function loadUploadsForMoodBoard() {
+    setLoadingUploads(true);
+    try {
+      const response = await fetch('/api/uploads', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch uploads');
+      const data = await response.json();
+      const uploads = (Array.isArray(data) ? data : []).map((item: any) => ({
+        _id: item._id,
+        filename: item.filename || 'Untitled',
+        type: item.type || 'application/octet-stream',
+        fileUrl: item.fileUrl || null,
+        createdAt: item.createdAt || new Date().toISOString(),
+      }));
+      setAvailableUploads(uploads.filter((u: UploadOption) => !!u.fileUrl));
+    } catch (error) {
+      console.error('Failed to load uploads:', error);
+    } finally {
+      setLoadingUploads(false);
+    }
+  }
+
+  function isAttachmentSelected(fileUrl: string | null) {
+    if (!fileUrl) return false;
+    return newReport.attachments.some((a) => a.url === fileUrl);
+  }
+
+  function toggleMoodBoardAttachment(upload: UploadOption) {
+    if (!upload.fileUrl) return;
+    const exists = isAttachmentSelected(upload.fileUrl);
+    if (exists) {
+      setNewReport(prev => ({
+        ...prev,
+        attachments: prev.attachments.filter((a) => a.url !== upload.fileUrl)
+      }));
+      return;
+    }
+    setNewReport(prev => ({
+      ...prev,
+      attachments: [
+        ...prev.attachments,
+        {
+          filename: upload.filename,
+          url: upload.fileUrl!,
+          type: upload.type,
+          size: 0
+        }
+      ]
+    }));
   }
 
   function getAttachmentIcon(type: string) {
@@ -346,7 +429,7 @@ export default function ReportsPage() {
                     ? `grid ${report.attachments.length === 1 ? 'grid-cols-1' : report.attachments.length === 2 ? 'grid-cols-2' : 'grid-cols-2'} gap-0.5`
                     : 'grid grid-cols-2 gap-2'
                 }>
-                  {report.attachments.slice(0, report.type === 'mood_board' ? 4 : 4).map((attachment, index) => (
+                  {report.attachments.slice(0, 4).map((attachment, index) => (
                     <div key={index} className={`relative group ${report.type === 'mood_board' && index === 0 && report.attachments.length === 3 ? 'col-span-2' : ''}`}>
                       {attachment.type.startsWith('image/') || attachment.type.startsWith('video/') ? (
                         <img
@@ -374,7 +457,7 @@ export default function ReportsPage() {
                         <img src={report.attachments[4].thumbnail || report.attachments[4].url} className="absolute inset-0 w-full h-full object-cover opacity-40 blur-sm" />
                       )}
                       <span className="text-sm font-semibold text-gray-700 relative z-10 bg-white/80 px-2 py-1 rounded">
-                        +{report.attachments.length - (report.type === 'mood_board' ? 3 : 4)} more
+                        +{report.attachments.length - 4} more
                       </span>
                     </div>
                   )}
@@ -508,6 +591,56 @@ export default function ReportsPage() {
                     </select>
                   </div>
                 </div>
+
+                {newReport.type === 'mood_board' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Mood Board Media *
+                      </label>
+                      <span className="text-xs text-gray-500">{newReport.attachments.length} selected</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={uploadSearchTerm}
+                      onChange={(e) => setUploadSearchTerm(e.target.value)}
+                      placeholder="Search uploads by filename..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    {loadingUploads ? (
+                      <div className="text-sm text-gray-500 py-3">Loading uploads...</div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto border border-gray-200 rounded-md p-2">
+                        {availableUploads
+                          .filter((u) => u.filename.toLowerCase().includes(uploadSearchTerm.toLowerCase()))
+                          .slice(0, 60)
+                          .map((upload) => {
+                            const selected = isAttachmentSelected(upload.fileUrl);
+                            const isImage = upload.type.startsWith('image/');
+                            return (
+                              <button
+                                key={upload._id}
+                                type="button"
+                                onClick={() => toggleMoodBoardAttachment(upload)}
+                                className={`relative text-left rounded-md overflow-hidden border ${selected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200 hover:border-gray-300'}`}
+                              >
+                                {isImage ? (
+                                  <img src={upload.fileUrl || ''} alt={upload.filename} className="w-full h-20 object-cover" />
+                                ) : (
+                                  <div className="w-full h-20 bg-gray-100 flex items-center justify-center text-gray-500">
+                                    {getAttachmentIcon(upload.type)}
+                                  </div>
+                                )}
+                                <div className="p-1.5">
+                                  <p className="text-[11px] text-gray-700 truncate">{upload.filename}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">

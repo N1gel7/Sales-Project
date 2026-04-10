@@ -59,6 +59,34 @@ async function handler(req, res) {
       return res.status(201).json(formatted);
     }
 
+    // ── PATCH: Toggle reaction (like) ──
+    if (method === 'PATCH') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const { reportId } = body || {};
+      if (!reportId) return res.status(400).json({ error: 'reportId is required' });
+
+      const { data: report, error: getErr } = await supabase
+        .from('reports')
+        .select('id, likes')
+        .eq('id', reportId)
+        .single();
+      if (getErr || !report) return res.status(404).json({ error: 'Report not found' });
+
+      const currentLikes = Array.isArray(report.likes) ? report.likes : [];
+      const alreadyLiked = currentLikes.some((entry) => entry?.user === req.user?.id);
+      const nextLikes = alreadyLiked
+        ? currentLikes.filter((entry) => entry?.user !== req.user?.id)
+        : [...currentLikes, { user: req.user?.id, likedAt: new Date().toISOString() }];
+
+      const { error: updateErr } = await supabase
+        .from('reports')
+        .update({ likes: nextLikes, updated_at: new Date().toISOString() })
+        .eq('id', reportId);
+      if (updateErr) throw updateErr;
+
+      return res.status(200).json({ liked: !alreadyLiked, likes: nextLikes });
+    }
+
     return res.status(200).json([]);
   } catch (error) {
     console.error('Reports error:', error);

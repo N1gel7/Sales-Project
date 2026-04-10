@@ -6,6 +6,18 @@ export const axiosInstance = axios.create({
   // Base configuration can go here
 });
 
+function extractApiErrorMessage(error: any): string {
+  const data = error?.response?.data;
+  if (typeof data === 'string' && data.trim()) return data;
+  if (data && typeof data === 'object') {
+    if (typeof data.error === 'string' && data.error.trim()) return data.error;
+    if (typeof data.message === 'string' && data.message.trim()) return data.message;
+    if (typeof data.details === 'string' && data.details.trim()) return data.details;
+  }
+  if (typeof error?.message === 'string' && error.message.trim()) return error.message;
+  return 'Request failed. Please try again.';
+}
+
 // Configure Axios Request Interceptor
 axiosInstance.interceptors.request.use(
   (config) => {
@@ -46,8 +58,7 @@ export async function http<T = unknown>(path: string, options: { method?: HttpMe
     });
     return res.data;
   } catch (error: any) {
-    const errorMessage = error.response?.data?.message || typeof error.response?.data === 'string' ? error.response.data : error.message || 'An HTTP error occurred';
-    throw new Error(errorMessage);
+    throw new Error(extractApiErrorMessage(error));
   }
 }
 

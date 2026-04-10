@@ -21,6 +21,10 @@ export default function Login(): React.ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null);
   const navigate = useNavigate();
 
 
@@ -38,6 +42,12 @@ export default function Login(): React.ReactElement {
     try {
       const res = await api.login(email.trim().toLowerCase(), password);
 
+      if (res?.requiresPasswordChange) {
+        setRequiresPasswordChange(true);
+        setPasswordChangeError(null);
+        return;
+      }
+
       if (!res || !res.token) {
         throw new Error('Invalid authentication response from server');
       }
@@ -54,6 +64,33 @@ export default function Login(): React.ReactElement {
     } catch (e: any) {
       // Axios error formatting handles the detail, catch block gracefully catches the formatted string
       setError(e.message || 'Authentication failed. Please check your credentials.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onInitialPasswordChange(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordChangeError(null);
+
+    if (newPassword !== confirmPassword) {
+      setPasswordChangeError('New password and confirm password do not match.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await api.changeInitialPassword(email.trim().toLowerCase(), password, newPassword);
+      if (!res?.token) {
+        throw new Error('Password changed, but login token was not returned.');
+      }
+      localStorage.setItem('auth_token', res.token);
+      if (res.user) {
+        localStorage.setItem('user_info', JSON.stringify(res.user));
+      }
+      navigate('/');
+    } catch (e: any) {
+      setPasswordChangeError(e.message || 'Failed to change password.');
     } finally {
       setLoading(false);
     }
@@ -154,7 +191,7 @@ export default function Login(): React.ReactElement {
                   <p className="text-gray-600">Sign in to your account to continue</p>
                 </div>
 
-                <form onSubmit={onSubmit} className="space-y-6">
+                <form onSubmit={requiresPasswordChange ? onInitialPasswordChange : onSubmit} className="space-y-6">
                   {error && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center space-x-2">
                       <div className="w-5 h-5 text-red-500">⚠️</div>
@@ -194,6 +231,7 @@ export default function Login(): React.ReactElement {
                         className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                         placeholder="Enter your password"
                         required
+                        disabled={requiresPasswordChange}
                       />
                       <button
                         type="button"
@@ -209,6 +247,41 @@ export default function Login(): React.ReactElement {
                     </div>
                   </div>
 
+                  {requiresPasswordChange && (
+                    <>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                        First login detected. Please set a new password before continuing.
+                      </div>
+                      {passwordChangeError && (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                          {passwordChangeError}
+                        </div>
+                      )}
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">New Password</label>
+                        <input
+                          type="password"
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          placeholder="At least 8 chars with upper/lower/number/symbol"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Confirm New Password</label>
+                        <input
+                          type="password"
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                          placeholder="Re-enter new password"
+                          required
+                        />
+                      </div>
+                    </>
+                  )}
+
                   {/* Login Button */}
                   <button
                     type="submit"
@@ -223,7 +296,7 @@ export default function Login(): React.ReactElement {
                     ) : (
                       <>
                         <LogIn className="h-5 w-5" />
-                        <span>Sign In</span>
+                        <span>{requiresPasswordChange ? 'Update Password' : 'Sign In'}</span>
                         <ArrowRight className="h-4 w-4" />
                       </>
                     )}
@@ -231,7 +304,7 @@ export default function Login(): React.ReactElement {
                 </form>
 
                 {/* Demo Accounts Section */}
-                <div className="mt-8 pt-6 border-t border-gray-200">
+                {!requiresPasswordChange && <div className="mt-8 pt-6 border-t border-gray-200">
                   <div className="text-center mb-4">
                     <h3 className="text-sm font-medium text-gray-700 mb-2">Demo Accounts</h3>
                     <p className="text-xs text-gray-500">Use these credentials to test the application</p>
@@ -264,7 +337,7 @@ export default function Login(): React.ReactElement {
                   </div>
 
 
-                </div>
+                </div>}
 
               </div>
             </div>

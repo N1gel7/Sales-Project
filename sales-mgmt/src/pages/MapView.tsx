@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getLocationLabel } from '../utils/locationLabel';
 
 // Declare Leaflet types
 declare global {
@@ -34,6 +35,11 @@ export default function MapView(): React.ReactElement {
   const [showUsers, setShowUsers] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const formatLocation = async (lat: number, lng: number): Promise<string> => {
+    const label = await getLocationLabel(lat, lng);
+    return label ? `${label} (${lat.toFixed(4)}, ${lng.toFixed(4)})` : `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  };
 
   // Load Leaflet dynamically
   useEffect(() => {
@@ -277,7 +283,7 @@ export default function MapView(): React.ReactElement {
     }
   };
 
-  const loadDemoProducts = () => {
+  const loadDemoProducts = async () => {
     // Real geographic locations
     const productLocations = [
       { name: 'New York Office', location: [40.7128, -74.0060], description: 'Main headquarters' },
@@ -287,7 +293,7 @@ export default function MapView(): React.ReactElement {
       { name: 'Seattle Office', location: [47.6062, -122.3321], description: 'Northwest operations' }
     ];
 
-    productLocations.forEach(product => {
+    for (const product of productLocations) {
       const [lat, lng] = product.location;
       const marker = window.L.marker([lat, lng], {
         icon: window.L.divIcon({
@@ -298,22 +304,23 @@ export default function MapView(): React.ReactElement {
         })
       });
 
+      const locationText = await formatLocation(lat, lng);
       marker.bindPopup(`
         <div style="padding: 8px;">
           <h3 style="font-weight: bold; color: #7c3aed; margin-bottom: 4px;">${product.name}</h3>
           <p style="color: #6b7280;">${product.description}</p>
           <p style="font-size: 12px; color: #9ca3af; margin-top: 4px;">
-            <strong>Coordinates:</strong> ${lat.toFixed(4)}, ${lng.toFixed(4)}
+            <strong>Coordinates:</strong> ${locationText}
           </p>
         </div>
       `);
 
       marker.addTo(mapInstanceRef.current);
       markersRef.current.products.push(marker);
-    });
+    }
   };
 
-  const loadDemoUsers = () => {
+  const loadDemoUsers = async () => {
     // Real geographic locations
     const userLocations = [
       { name: 'John Doe', role: 'Sales Rep', location: [40.7589, -73.9851], description: 'Times Square Area' },
@@ -323,7 +330,7 @@ export default function MapView(): React.ReactElement {
       { name: 'David Brown', role: 'Manager', location: [39.7392, -104.9903], description: 'Denver Office' }
     ];
 
-    userLocations.forEach(user => {
+    for (const user of userLocations) {
       const [lat, lng] = user.location;
       const marker = window.L.marker([lat, lng], {
         icon: window.L.divIcon({
@@ -334,20 +341,21 @@ export default function MapView(): React.ReactElement {
         })
       });
 
+      const locationText = await formatLocation(lat, lng);
       marker.bindPopup(`
         <div style="padding: 8px;">
           <h3 style="font-weight: bold; color: #ea580c; margin-bottom: 4px;">${user.name}</h3>
           <p style="color: #6b7280; margin-bottom: 4px;">${user.role}</p>
           <p style="font-size: 12px; color: #9ca3af; margin-bottom: 4px;">${user.description}</p>
           <p style="font-size: 12px; color: #9ca3af;">
-            <strong>Location:</strong> ${lat.toFixed(4)}, ${lng.toFixed(4)}
+            <strong>Location:</strong> ${locationText}
           </p>
         </div>
       `);
 
       marker.addTo(mapInstanceRef.current);
       markersRef.current.users.push(marker);
-    });
+    }
   };
 
   const centerMap = () => {

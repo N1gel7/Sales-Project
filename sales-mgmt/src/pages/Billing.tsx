@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import LocationText from '../components/LocationText';
 import { 
   Download, 
   Mail, 
@@ -299,7 +300,7 @@ export default function Billing(): React.ReactElement {
             </div>
             {location && (
               <p className="text-xs text-gray-500 mt-1">
-                {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                <LocationText lat={location.lat} lng={location.lng} />
               </p>
             )}
           </div>
@@ -354,7 +355,7 @@ export default function Billing(): React.ReactElement {
                       {invoice.location && (
                         <div className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
-                          {invoice.location.lat.toFixed(2)}, {invoice.location.lng.toFixed(2)}
+                          <LocationText lat={invoice.location.lat} lng={invoice.location.lng} />
                         </div>
                       )}
                       {invoice.emailTo && (
@@ -453,7 +454,7 @@ export default function Billing(): React.ReactElement {
               {location && (
                 <div className="text-xs text-green-600 flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
-                  Location captured: {location.lat.toFixed(4)}, {location.lng.toFixed(4)}
+                  Location captured: <LocationText lat={location.lat} lng={location.lng} />
                 </div>
               )}
             </div>
@@ -500,7 +501,7 @@ export default function Billing(): React.ReactElement {
                 <div>
                   <span className="text-gray-500">Location:</span>{' '}
                   <span className="font-medium">
-                    {previewInvoice.location.lat.toFixed(4)}, {previewInvoice.location.lng.toFixed(4)}
+                    <LocationText lat={previewInvoice.location.lat} lng={previewInvoice.location.lng} />
                   </span>
                 </div>
               )}
