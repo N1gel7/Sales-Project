@@ -654,19 +654,25 @@ export default function ChatPage() {
                 {selectedChat.participants.length} member{selectedChat.participants.length !== 1 ? 's' : ''} in this chat
               </div>
               
-              {selectedChat.participants.map((participant, index) => (
+              {selectedChat.participants.map((participant, index) => {
+                const uid = typeof participant.user === 'object' ? (participant.user?._id || participant.user?.id) : participant.user;
+                const matchedUser = users.find(u => u._id === uid) || participant.user;
+                const participantName = matchedUser?.name || 'Unknown User';
+                const participantRole = matchedUser?.role || 'Member';
+                
+                return (
                 <div key={index} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                     <span className="text-sm font-medium text-blue-600">
-                      {participant.user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                      {participantName.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1">
                     <p className="font-medium text-gray-900">
-                      {participant.user?.name || 'Unknown User'}
+                      {participantName}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {participant.user?.role || 'Member'} • {participant.role}
+                      {participantRole} • {participant.role}
                     </p>
                   </div>
                   {participant.role === 'admin' && (
@@ -675,7 +681,7 @@ export default function ChatPage() {
                     </span>
                   )}
                 </div>
-              ))}
+              )})}
             </div>
 
             {/* Add Members Section */}
