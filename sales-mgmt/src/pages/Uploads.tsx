@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
+import LocationText from '../components/LocationText';
 
 type Location = { lat: number; lng: number } | null;
 
@@ -342,7 +343,9 @@ export default function Uploads(): React.ReactElement {
             
             <div className="mt-2 text-xs">
               {location ? (
-                <div className="text-green-600">📍 Lat: {location.lat.toFixed(4)}, Lng: {location.lng.toFixed(4)}</div>
+                <div className="text-green-600">
+                  📍 <LocationText lat={location.lat} lng={location.lng} />
+                </div>
               ) : (
                 <div className="text-gray-500">Location not captured yet.</div>
               )}
@@ -448,9 +451,12 @@ export default function Uploads(): React.ReactElement {
                             {(t || 'file').toUpperCase()}
                           </span>
                           Uploaded by <span className="font-medium text-slate-700">{upload.user?.code || 'Unknown Rep'}</span>
-                          {upload.coords?.lat != null && upload.coords?.lng != null
-                            ? ` • 📍 Location: (${Number(upload.coords.lat).toFixed(4)}, ${Number(upload.coords.lng).toFixed(4)})`
-                            : null}
+                          {upload.coords?.lat != null && upload.coords?.lng != null ? (
+                            <>
+                              {' '}• 📍 Location:{' '}
+                              <LocationText lat={Number(upload.coords.lat)} lng={Number(upload.coords.lng)} />
+                            </>
+                          ) : null}
                         </div>
                       </div>
 

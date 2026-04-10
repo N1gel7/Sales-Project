@@ -16,7 +16,6 @@ import {
   User,
   Users as UsersIcon,
   Settings,
-  Bell,
   Search,
   ChevronDown
 } from 'lucide-react';
@@ -106,10 +105,6 @@ function UserInfo() {
             <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Settings
-            </button>
-            <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-              <Bell className="h-4 w-4" />
-              Notifications
             </button>
           </div>
         </div>
@@ -291,12 +286,6 @@ function App(): React.ReactElement {
                       placeholder="Search products, people..."
                     />
                   </div>
-
-                  {/* Notifications */}
-                  <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative">
-                    <Bell className="h-5 w-5 text-gray-600" />
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                  </button>
 
                   {/* User Menu */}
                   <div className="hidden sm:flex items-center gap-3">

@@ -47,7 +47,10 @@ async function handler(req, res) {
           code, 
           role, 
           password_hash: passwordHash, 
-          active: true 
+          active: true,
+          reset_password_token: null,
+          // Sentinel value: 0 means first login must change initial password.
+          reset_password_expires: 0
         }])
         .select('id, created_at')
         .single();

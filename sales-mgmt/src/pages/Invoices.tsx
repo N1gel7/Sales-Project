@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
+import LocationText from '../components/LocationText';
 
 export default function Invoices(): React.ReactElement {
   const [items, setItems] = useState<any[]>([]);
@@ -99,7 +100,9 @@ export default function Invoices(): React.ReactElement {
         </div>
         {coords && (
           <div className="card-body pt-0">
-            <div className="text-xs text-green-600">📍 Location captured: {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}</div>
+            <div className="text-xs text-green-600">
+              📍 Location captured: <LocationText lat={coords.lat} lng={coords.lng} />
+            </div>
           </div>
         )}
       </div>
@@ -119,7 +122,9 @@ export default function Invoices(): React.ReactElement {
                   <div className="text-sm font-medium">{inv.client}</div>
                   <div className="text-xs text-gray-500">
                     {inv.product} • GHS {inv.price}
-                    {inv.location?.lat && inv.location?.lng ? ` • 📍 (${inv.location.lat.toFixed(4)}, ${inv.location.lng.toFixed(4)})` : null}
+                    {inv.location?.lat && inv.location?.lng ? (
+                      <> • 📍 <LocationText lat={Number(inv.location.lat)} lng={Number(inv.location.lng)} /></>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

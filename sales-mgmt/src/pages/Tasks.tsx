@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, Plus, Search, Calendar, MapPin, User, Clock } from 'lucide-react';
+import { Plus, Search, Calendar, MapPin, User, Clock } from 'lucide-react';
+import LocationText from '../components/LocationText';
+import { getLocationLabel } from '../utils/locationLabel';
 
 type Task = {
   _id: string;
@@ -196,13 +198,15 @@ export default function Tasks(): React.ReactElement {
 
   function captureLocation() {
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const locationLabel = await getLocationLabel(lat, lng);
           setNewTask(prev => ({
             ...prev,
             location: {
-              name: 'Current Location',
-              coords: { lat: pos.coords.latitude, lng: pos.coords.longitude }
+              name: locationLabel || 'Current Location',
+              coords: { lat, lng }
             }
           }));
         },
@@ -245,14 +249,6 @@ export default function Tasks(): React.ReactElement {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Task Management</h1>
         <div className="flex items-center gap-4">
-          <div className="relative">
-            <Bell className="h-6 w-6 text-gray-600" />
-            {notifications.length > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                {notifications.length}
-              </span>
-            )}
-          </div>
           <button
             onClick={() => setShowCreateForm(true)}
             className="flex items-center gap-2 h-9 px-4 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
@@ -479,7 +475,7 @@ export default function Tasks(): React.ReactElement {
                 </button>
                 {newTask.location?.coords && (
                   <span className="text-xs text-green-600">
-                    📍 {newTask.location.coords.lat.toFixed(4)}, {newTask.location.coords.lng.toFixed(4)}
+                    📍 <LocationText lat={newTask.location.coords.lat} lng={newTask.location.coords.lng} />
                   </span>
                 )}
               </div>

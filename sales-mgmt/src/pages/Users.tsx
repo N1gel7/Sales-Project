@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { axiosInstance } from '../services/http';
 import { 
   Users as UsersIcon, 
   Plus, 
@@ -46,7 +46,7 @@ const Users = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('/api/users');
+      const res = await axiosInstance.get('/api/users');
       setUsers(res.data);
     } catch (err) {
       console.error('Failed to fetch users:', err);
@@ -68,7 +68,7 @@ const Users = () => {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await axios.post('/api/users', formData);
+      const res = await axiosInstance.post('/api/users', formData);
       setUsers([res.data, ...users]); // Prepend new user
       setShowAddModal(false);
       setFormData({ name: '', email: '', role: 'sales', password: '' });
