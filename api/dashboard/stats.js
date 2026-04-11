@@ -24,12 +24,14 @@ async function handler(req, res) {
       completionResult,
       productResult,
       { data: uploads },
+      { data: users },
     ] = await Promise.all([
       getDailySalesSQL(7),
       getMonthlySalesSQL(12),
       getTaskCompletionRatesSQL(),
       getProductPerformanceSQL(10),
-      supabase.from('uploads').select('coords, type'),
+      supabase.from('uploads').select('coords, type, user_id'),
+      supabase.from('users').select('id, code'),
     ]);
 
     // ── Task stats: status breakdown from completion result ───────────────────
@@ -103,8 +105,14 @@ async function handler(req, res) {
       return { lat, lng };
     }
 
+    const userMap = {};
+    (users || []).forEach(u => userMap[u.id] = u.code || '');
+
     const locMap = {};
     (uploads || []).forEach(u => {
+      const uCode = userMap[u.user_id] || '';
+      if (uCode.toLowerCase().includes('admin')) return;
+
       const pt = parseUploadCoords(u.coords);
       if (!pt) return;
       const key = `${pt.lat.toFixed(4)},${pt.lng.toFixed(4)}`;

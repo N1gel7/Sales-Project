@@ -37,11 +37,21 @@ export async function generateInvoicePdfBuffer(invoice) {
 
     doc.fontSize(12).text('Invoice Details', { underline: true });
     doc.moveDown(0.4);
-    doc.fontSize(11).text(`Product: ${invoice.product}`);
-    doc.text(`Amount: ${formatCurrency(invoice.price)}`);
-    doc.text(`Status: ${invoice.status || 'draft'}`);
+    
+    if (invoice.items && invoice.items.length > 0) {
+      invoice.items.forEach((item, index) => {
+        const itemText = `${index + 1}. ${item.name} x${item.quantity || 1} - ${formatCurrency(item.price)}`;
+        doc.fontSize(11).text(itemText);
+      });
+      doc.moveDown(0.5);
+    } else {
+      doc.fontSize(11).text(`Product: ${invoice.product}`);
+    }
+    
+    doc.fontSize(12).text(`Total Amount: ${formatCurrency(invoice.price)}`, { bold: true });
+    doc.fontSize(11).text(`Status: ${invoice.status || 'draft'}`);
     doc.text(`Emailed: ${invoice.emailed ? 'Yes' : 'No'}`);
-
+    
     if (invoice.location?.lat && invoice.location?.lng) {
       doc.text(`Location: ${invoice.location.lat}, ${invoice.location.lng}`);
     }

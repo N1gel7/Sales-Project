@@ -9,7 +9,7 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Plus, Search, MapPin, GripVertical } from 'lucide-react';
+import { Plus, Search, MapPin, GripVertical, X } from 'lucide-react';
 import LocationText from '../components/LocationText';
 import { getLocationLabel } from '../utils/locationLabel';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -50,7 +50,7 @@ type ColId = 'pending' | 'in_progress' | 'completed';
 
 const COLS: { id: ColId; label: string; labelClass: string; badgeClass: string }[] = [
   { id: 'pending', label: 'Pending', labelClass: 'text-muted-foreground', badgeClass: 'bg-muted text-muted-foreground' },
-  { id: 'in_progress', label: 'In progress', labelClass: 'text-[var(--accent-blue)]', badgeClass: 'bg-[var(--accent-blue-light)] text-[var(--accent-blue)]' },
+  { id: 'in_progress', label: 'Accepted / In Progress', labelClass: 'text-[var(--accent-blue)]', badgeClass: 'bg-[var(--accent-blue-light)] text-[var(--accent-blue)]' },
   { id: 'completed', label: 'Completed', labelClass: 'text-[var(--brand-green-dark)]', badgeClass: 'bg-[var(--brand-green-light)] text-[var(--brand-green-dark)]' },
 ];
 
@@ -163,10 +163,16 @@ function DraggableCard({
 }
 
 export default function Tasks(): React.ReactElement {
+  const userInfo = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
+  const userRole = userInfo ? JSON.parse(userInfo)?.role : null;
+  const isSales = userRole === 'sales';
+  const isManager = userRole === 'manager';
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'mine' | 'overdue'>('all');
+  const [filter, setFilter] = useState<'all' | 'mine' | 'overdue'>(isSales ? 'all' : 'all');
+  const [userFilter, setUserFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [newTask, setNewTask] = useState({
@@ -236,17 +242,26 @@ export default function Tasks(): React.ReactElement {
     void loadUsers();
   }, []);
 
+  const uniqueUsers = useMemo(() => {
+    const map = new Map<string, string>();
+    tasks.forEach(t => {
+      if (t.assignee?.id) map.set(t.assignee.id, t.assignee.name || t.assignee.id);
+    });
+    return Array.from(map.entries()).map(([code, name]) => ({ code, name }));
+  }, [tasks]);
+
   const filtered = useMemo(() => {
     return tasks.filter((task) => {
       if (searchTerm && !task.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-      if (filter === 'mine' && currentUserId && task.assignee?.id !== currentUserId) return false;
-      if (filter === 'overdue') {
+      if (isSales && currentUserId && task.assignee?.id !== currentUserId) return false;
+      if (isSales && filter === 'overdue') {
         const o = task.status === 'overdue' || (task.dueAt && new Date(task.dueAt) < new Date() && task.status !== 'completed');
         if (!o) return false;
       }
+      if (!isSales && userFilter !== 'all' && task.assignee?.id !== userFilter) return false;
       return true;
     });
-  }, [tasks, searchTerm, filter, currentUserId]);
+  }, [tasks, searchTerm, filter, currentUserId, isSales, userFilter]);
 
   const byCol = useMemo(() => {
     const m: Record<ColId, Task[]> = { pending: [], in_progress: [], completed: [] };
@@ -389,12 +404,43 @@ export default function Tasks(): React.ReactElement {
     );
   }
 
+  const computedStatus = selectedTask?.status === 'overdue' || (selectedTask?.dueAt && new Date(selectedTask.dueAt) < new Date() && selectedTask?.status !== 'completed') ? 'overdue' : selectedTask?.status;
+
   const detailPanel = selectedTask && (
     <div className="flex h-full min-h-0 flex-col border-l border-[var(--color-border-tertiary)] bg-[var(--surface)]">
-      <div className="border-b border-[var(--color-border-tertiary)] p-4">
-        <p className="text-[14px] font-medium leading-snug">{selectedTask.title}</p>
-        <div className="mt-2">
-          <StatusBadge status={selectedTask.status} />
+      <div className="border-b border-[var(--color-border-tertiary)] p-4 flex justify-between items-start">
+        <div>
+          <p className="text-[14px] font-medium leading-snug">{selectedTask.title}</p>
+          <div className="mt-2">
+            <StatusBadge status={computedStatus || selectedTask.status} />
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {selectedTask.status === 'pending' && isSales && selectedTask.assignee?.id === currentUserId && (
+            <Button 
+              size="sm" 
+              onClick={() => void updateTaskStatus(selectedTask._id, 'in_progress')}
+              className="bg-[var(--accent-blue)] hover:bg-[var(--accent-blue)]/90 text-white"
+            >
+              Accept Task
+            </Button>
+          )}
+          {selectedTask.status === 'in_progress' && isSales && selectedTask.assignee?.id === currentUserId && (
+            <Button 
+              size="sm" 
+              onClick={() => void updateTaskStatus(selectedTask._id, 'completed')}
+              className="bg-[var(--brand-green)] hover:bg-[var(--brand-green-dark)] text-white"
+            >
+              Mark Complete
+            </Button>
+          )}
+          <button
+            type="button"
+            onClick={() => setSelectedTask(null)}
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--surface-2)] hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-4 text-sm">
@@ -451,17 +497,6 @@ export default function Tasks(): React.ReactElement {
           </div>
         </div>
       </div>
-      <div className="border-t border-[var(--color-border-tertiary)] p-3">
-        <Textarea
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Write a reply…"
-          className="min-h-[72px] resize-none"
-        />
-        <Button className="mt-2 w-full bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]" onClick={() => void addComment(selectedTask._id)}>
-          Send
-        </Button>
-      </div>
     </div>
   );
 
@@ -469,34 +504,44 @@ export default function Tasks(): React.ReactElement {
     <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-4 lg:flex-row">
       <div className="min-w-0 flex-1 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex gap-1 rounded-full border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-0.5">
-            {(['all', 'mine', 'overdue'] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={cn(
-                  'rounded-full px-3 py-1 text-xs font-medium capitalize',
-                  filter === f ? 'bg-[var(--brand-dark)] text-white' : 'text-muted-foreground'
-                )}
+          {isSales ? (
+            <div className="flex gap-1 rounded-full border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-0.5">
+              {(['all', 'overdue'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    'rounded-full px-3 py-1 text-xs font-medium capitalize',
+                    filter === f ? 'bg-[var(--brand-dark)] text-white' : 'text-muted-foreground'
+                  )}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Filter by Rep:</label>
+              <select
+                value={userFilter}
+                onChange={(e) => setUserFilter(e.target.value)}
+                className="h-8 max-w-[160px] rounded-md border border-[var(--color-border-tertiary)] bg-[var(--surface)] px-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-green)]"
               >
-                {f === 'mine' ? 'Mine' : f}
-              </button>
-            ))}
-          </div>
-          <div className="relative min-w-[200px] flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search tasks…"
-              className="pl-9"
-            />
-          </div>
-          <Button onClick={() => setShowCreate(true)} className="bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]">
-            <Plus className="mr-1 h-4 w-4" />
-            New task
-          </Button>
+                <option value="all">All Reps</option>
+                {uniqueUsers.map(u => (
+                  <option key={u.code} value={u.code}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {isManager && (
+            <Button onClick={() => setShowCreate(true)} className="bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]">
+              <Plus className="mr-1 h-4 w-4" />
+              New task
+            </Button>
+          )}
         </div>
 
         {loading ? (

@@ -113,9 +113,9 @@ function SidebarNav({
   return (
     <nav className={cn('flex flex-1 flex-col gap-0.5 p-2', linkClass)}>
       <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" onNavigate={onNavigate} />
-      {role === 'admin' && <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" onNavigate={onNavigate} />}
-      {(role === 'admin' || role === 'manager') && (
+      {role === 'admin' && (
         <>
+          <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" onNavigate={onNavigate} />
           <SideLink to="/products" icon={<Package size={20} />} label="Products" onNavigate={onNavigate} />
           <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" onNavigate={onNavigate} />
         </>
@@ -318,8 +318,8 @@ function AppShell(): React.ReactElement {
             <main className="flex-1 p-4 sm:p-6 lg:p-8">
               <Routes>
                 <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-                <Route path="/products" element={<RequireAuth roles={['admin', 'manager', 'sales']}><Products /></RequireAuth>} />
-                <Route path="/categories" element={<RequireAuth roles={['admin', 'manager', 'sales']}><Categories /></RequireAuth>} />
+                <Route path="/products" element={<RequireAuth roles={['admin']}><Products /></RequireAuth>} />
+                <Route path="/categories" element={<RequireAuth roles={['admin']}><Categories /></RequireAuth>} />
                 <Route path="/tasks" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Tasks /></RequireAuth>} />
                 <Route path="/uploads" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Uploads /></RequireAuth>} />
                 <Route path="/billing" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Billing /></RequireAuth>} />

@@ -345,10 +345,6 @@ export default function MapViewSimple(): React.ReactElement {
     <div className="relative z-0 flex flex-col gap-0 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)]">
       <div className="flex flex-col justify-between gap-3 border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] px-4 py-3 sm:flex-row sm:items-center">
         <div>
-          <p className="text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{visibleCount}</span> pins shown ·{' '}
-            <span className="font-semibold">{geoUploads.length}</span> geolocated uploads
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
