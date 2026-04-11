@@ -123,10 +123,7 @@ function SidebarNav({
       <SideLink to="/tasks" icon={<ClipboardList size={20} />} label="Tasks" onNavigate={onNavigate} />
       <SideLink to="/uploads" icon={<Upload size={20} />} label="Uploads" onNavigate={onNavigate} />
       {(role === 'admin' || role === 'sales') && (
-        <>
-          <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" onNavigate={onNavigate} />
-          <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" onNavigate={onNavigate} />
-        </>
+        <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" onNavigate={onNavigate} />
       )}
       <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" onNavigate={onNavigate} />
       <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" onNavigate={onNavigate} />

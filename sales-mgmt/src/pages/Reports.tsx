@@ -5,8 +5,6 @@ import {
   Search,
   Heart,
   MessageCircle,
-  Share2,
-  Download,
   Eye,
   Calendar,
   User,
@@ -574,24 +572,6 @@ export default function ReportsPage() {
                     {report.likes.length}
                   </span>
                 </div>
-                {report.type !== 'mood_board' && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      className="p-1 text-muted-foreground hover:text-foreground"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      className="p-1 text-muted-foreground hover:text-foreground"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Download className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
