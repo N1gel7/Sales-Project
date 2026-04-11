@@ -169,7 +169,15 @@ export default function Dashboard(): React.ReactElement {
 
       if (uploadsRes?.ok) {
         const ud = await uploadsRes.json();
-        setUploadCount(Array.isArray(ud) ? ud.length : 0);
+        if (Array.isArray(ud)) {
+          const validUploads = ud.filter(u => {
+            const userCode = u.user?.code || '';
+            return !userCode.toLowerCase().includes('admin');
+          });
+          setUploadCount(validUploads.length);
+        } else {
+          setUploadCount(0);
+        }
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') {

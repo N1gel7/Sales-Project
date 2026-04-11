@@ -16,11 +16,19 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+type InvoiceItem = {
+  productId?: string;
+  name: string;
+  quantity: number;
+  price: number;
+};
+
 type Invoice = {
   _id: string;
   client: string;
   product: string;
   price: number;
+  items?: InvoiceItem[];
   location?: { lat: number; lng: number };
   emailTo?: string;
   emailSent: boolean;
@@ -34,6 +42,7 @@ type Invoice = {
 
 export default function Billing(): React.ReactElement {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [products, setProducts] = useState<{ _id?: string, id?: string, name: string, price: number, category?: any }[]>([]);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -43,9 +52,16 @@ export default function Billing(): React.ReactElement {
   // Create invoice form
   const [newInvoice, setNewInvoice] = useState({
     client: '',
-    product: '',
-    price: '',
+    items: [] as InvoiceItem[],
     notes: ''
+  });
+  
+  // Current item being added
+  const [currentItem, setCurrentItem] = useState({
+    productId: '',
+    name: '',
+    quantity: 1,
+    price: 0
   });
   
   // Email form
@@ -66,7 +82,10 @@ export default function Billing(): React.ReactElement {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
       });
       const data = await response.json();
-      setInvoices(data);
+      console.log('[loadInvoices] status:', response.status, 'count:', Array.isArray(data) ? data.length : 'NOT_ARRAY', data);
+      if (Array.isArray(data)) {
+        setInvoices(data);
+      }
     } catch (error) {
       console.error('Failed to load invoices:', error);
     } finally {
@@ -74,8 +93,23 @@ export default function Billing(): React.ReactElement {
     }
   }
 
+  async function loadProducts() {
+    try {
+      const response = await fetch('/api/products', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data);
+      }
+    } catch (error) {
+      console.error('Failed to load products:', error);
+    }
+  }
+
   useEffect(() => {
     loadInvoices();
+    loadProducts();
     // Capture location on page load
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -87,8 +121,8 @@ export default function Billing(): React.ReactElement {
   }, []);
 
   async function createInvoice() {
-    if (!newInvoice.client || !newInvoice.product || !newInvoice.price) {
-      toast.error('Please fill in all required fields.');
+    if (!newInvoice.client || newInvoice.items.length === 0) {
+      toast.error('Please add a client and at least one product.');
       return;
     }
 
@@ -100,14 +134,15 @@ export default function Billing(): React.ReactElement {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         },
         body: JSON.stringify({
-          ...newInvoice,
-          price: parseFloat(newInvoice.price),
+          client: newInvoice.client,
+          items: newInvoice.items,
+          notes: newInvoice.notes,
           coords: location
         })
       });
 
       if (response.ok) {
-        setNewInvoice({ client: '', product: '', price: '', notes: '' });
+        setNewInvoice({ client: '', items: [], notes: '' });
         setShowCreateForm(false);
         await loadInvoices();
         toast.success('Invoice created.');
@@ -117,6 +152,56 @@ export default function Billing(): React.ReactElement {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create invoice.');
+    }
+  }
+
+  function addItem() {
+    if (!currentItem.name || currentItem.price <= 0 || currentItem.quantity <= 0) {
+      toast.error('Please select a product and set valid quantity/price.');
+      return;
+    }
+    setNewInvoice(prev => ({
+      ...prev,
+      items: [...prev.items, { ...currentItem }]
+    }));
+    setCurrentItem({ productId: '', name: '', quantity: 1, price: 0 });
+  }
+
+  function removeItem(index: number) {
+    setNewInvoice(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  }
+
+  async function markAsPaid(invoiceId: string) {
+    // Optimistically update local state immediately
+    setInvoices(prev => prev.map(inv =>
+      inv._id === invoiceId ? { ...inv, status: 'paid' as const } : inv
+    ));
+
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/pay`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+
+      const body = await response.text();
+      console.log('[markAsPaid] Response:', response.status, body);
+
+      if (response.ok) {
+        toast.success('Invoice marked as paid.');
+      } else {
+        await loadInvoices();
+        toast.error('Failed to mark invoice as paid.');
+      }
+    } catch (error) {
+      console.error('[markAsPaid] Error:', error);
+      await loadInvoices();
+      toast.error('Failed to update invoice.');
     }
   }
 
@@ -270,22 +355,6 @@ export default function Billing(): React.ReactElement {
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Paid Invoices</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {paidInvoices}
-                </p>
-              </div>
-              <CheckCircle className="h-8 w-8 text-blue-600" />
-            </div>
-            <p className="text-xs text-gray-500 mt-1">
-              {pendingInvoices} pending
-            </p>
-          </div>
-        </div>
 
         <div className="card">
           <div className="card-body">
@@ -336,9 +405,21 @@ export default function Billing(): React.ReactElement {
                         <span className="text-gray-500">Client:</span>
                         <span className="ml-2 font-medium">{invoice.client}</span>
                       </div>
-                      <div>
-                        <span className="text-gray-500">Product:</span>
-                        <span className="ml-2 font-medium">{invoice.product}</span>
+                      <div className="md:col-span-2">
+                        <span className="text-gray-500">Products:</span>
+                        <div className="ml-2 font-medium">
+                          {invoice.items && invoice.items.length > 0 ? (
+                            <ul className="list-disc list-inside">
+                              {invoice.items.map((item, idx) => (
+                                <li key={idx}>
+                                  {item.name} x{item.quantity} ({formatCurrency(item.price)})
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <span>{invoice.product}</span>
+                          )}
+                        </div>
                       </div>
                       <div>
                         <span className="text-gray-500">Amount:</span>
@@ -386,6 +467,15 @@ export default function Billing(): React.ReactElement {
                       <Download className="h-3 w-3" />
                       PDF
                     </button>
+                    {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+                      <button
+                        onClick={() => void markAsPaid(invoice._id)}
+                        className="h-8 px-3 rounded-md border border-green-200 bg-green-50 text-green-700 text-sm hover:bg-green-100 flex items-center gap-1"
+                      >
+                        <CheckCircle className="h-3 w-3" />
+                        Pay
+                      </button>
+                    )}
                     {!invoice.emailSent && (
                       <button
                         onClick={() => {
@@ -419,32 +509,134 @@ export default function Billing(): React.ReactElement {
       {/* Create Invoice Modal */}
       {showCreateForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold mb-4">Create New Invoice</h2>
             <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Client name"
-                value={newInvoice.client}
-                onChange={(e) => setNewInvoice(prev => ({ ...prev, client: e.target.value }))}
-                className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
-              />
-              <input
-                type="text"
-                placeholder="Product description"
-                value={newInvoice.product}
-                onChange={(e) => setNewInvoice(prev => ({ ...prev, product: e.target.value }))}
-                className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
-              />
-              <input
-                type="number"
-                placeholder="Price (GHS)"
-                value={newInvoice.price}
-                onChange={(e) => setNewInvoice(prev => ({ ...prev, price: e.target.value }))}
-                className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
-                step="0.01"
-                min="0"
-              />
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Client Name</label>
+                <input
+                  type="text"
+                  placeholder="Client name"
+                  value={newInvoice.client}
+                  onChange={(e) => setNewInvoice(prev => ({ ...prev, client: e.target.value }))}
+                  className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
+                />
+              </div>
+
+              {/* Added Items List */}
+              {newInvoice.items.length > 0 && (
+                <div className="border border-gray-100 rounded-md overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium text-gray-600">Item</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-600">Qty</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-600">Price</th>
+                        <th className="px-3 py-2 text-right font-medium text-gray-600">Total</th>
+                        <th className="px-3 py-2 text-center"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {newInvoice.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2">{item.name}</td>
+                          <td className="px-3 py-2 text-center">{item.quantity}</td>
+                          <td className="px-3 py-2 text-right">{formatCurrency(item.price)}</td>
+                          <td className="px-3 py-2 text-right font-medium">{formatCurrency(item.price * item.quantity)}</td>
+                          <td className="px-3 py-2 text-center">
+                            <button onClick={() => removeItem(idx)} className="text-red-500 hover:text-red-700">
+                              <Plus className="h-4 w-4 rotate-45" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-bold">
+                      <tr>
+                        <td colSpan={3} className="px-3 py-2 text-right">Grand Total:</td>
+                        <td className="px-3 py-2 text-right text-green-600">
+                          {formatCurrency(newInvoice.items.reduce((s, i) => s + (i.price * i.quantity), 0))}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+
+              {/* Add Item Section */}
+              <div className="bg-gray-50 p-3 rounded-md border border-gray-100 space-y-3">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Add Products</p>
+                <div className="grid grid-cols-1 gap-3">
+                  <select
+                    value={currentItem.name}
+                    onChange={(e) => {
+                      const prodName = e.target.value;
+                      const selectedProd = products.find(p => p.name === prodName);
+                      if (selectedProd) {
+                        setCurrentItem(prev => ({ 
+                          ...prev, 
+                          productId: selectedProd._id || selectedProd.id || '',
+                          name: selectedProd.name,
+                          price: selectedProd.price
+                        }));
+                      }
+                    }}
+                    className="w-full h-10 border border-gray-200 bg-white rounded-md px-3 text-sm"
+                  >
+                    <option value="" disabled>Select a product...</option>
+                    {Object.entries(
+                      products.reduce((acc, p) => {
+                        const cat = typeof p.category === 'object' && p.category?.name ? p.category.name : p.category || 'Uncategorized';
+                        if (!acc[cat]) acc[cat] = [];
+                        acc[cat].push(p);
+                        return acc;
+                      }, {} as Record<string, any[]>)
+                    ).map(([catName, prods]) => (
+                      <optgroup key={catName} label={catName}>
+                        {prods.map(p => (
+                          <option key={p._id || p.id || p.name} value={p.name}>
+                            {p.name} - {formatCurrency(p.price)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="block text-[10px] uppercase text-gray-400 font-bold mb-1">Qty</label>
+                      <input
+                        type="number"
+                        placeholder="Qty"
+                        value={currentItem.quantity}
+                        onChange={(e) => setCurrentItem(prev => ({ ...prev, quantity: parseInt(e.target.value) || 0 }))}
+                        className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
+                        min="1"
+                      />
+                    </div>
+                    <div className="flex-[2]">
+                      <label className="block text-[10px] uppercase text-gray-400 font-bold mb-1">Unit Price (GHS)</label>
+                      <input
+                        type="number"
+                        placeholder="Price"
+                        value={currentItem.price}
+                        readOnly
+                        className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                        step="0.01"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        onClick={addItem}
+                        className="h-10 px-4 rounded-md bg-gray-800 text-white text-sm hover:bg-gray-900 flex items-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" /> Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <textarea
                 placeholder="Notes (optional)"
                 value={newInvoice.notes}
@@ -460,14 +652,18 @@ export default function Billing(): React.ReactElement {
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <button
-                onClick={() => setShowCreateForm(false)}
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setNewInvoice({ client: '', items: [], notes: '' });
+                }}
                 className="h-9 px-4 rounded-md border border-gray-200 text-sm hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 onClick={createInvoice}
-                className="h-9 px-4 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
+                disabled={newInvoice.items.length === 0}
+                className="h-9 px-4 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 Create Invoice
               </button>
@@ -493,8 +689,24 @@ export default function Billing(): React.ReactElement {
             <div className="space-y-2 text-sm">
               <div><span className="text-gray-500">Invoice #:</span> <span className="font-medium">{previewInvoice._id.slice(-8)}</span></div>
               <div><span className="text-gray-500">Client:</span> <span className="font-medium">{previewInvoice.client}</span></div>
-              <div><span className="text-gray-500">Product:</span> <span className="font-medium">{previewInvoice.product}</span></div>
-              <div><span className="text-gray-500">Amount:</span> <span className="font-semibold text-green-600">{formatCurrency(previewInvoice.price)}</span></div>
+              
+              <div className="border-t border-b border-gray-100 py-2 my-2">
+                <span className="text-gray-500 block mb-1">Products:</span>
+                {previewInvoice.items && previewInvoice.items.length > 0 ? (
+                  <div className="space-y-1">
+                    {previewInvoice.items.map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-xs">
+                        <span>{item.name} x{item.quantity}</span>
+                        <span>{formatCurrency(item.price * item.quantity)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="font-medium text-sm">{previewInvoice.product}</div>
+                )}
+              </div>
+
+              <div><span className="text-gray-500">Total Amount:</span> <span className="font-semibold text-green-600">{formatCurrency(previewInvoice.price)}</span></div>
               <div><span className="text-gray-500">Status:</span> <span className="font-medium">{previewInvoice.status}</span></div>
               <div><span className="text-gray-500">Created:</span> <span className="font-medium">{new Date(previewInvoice.createdAt).toLocaleString()}</span></div>
               {previewInvoice.location && (
@@ -517,6 +729,18 @@ export default function Billing(): React.ReactElement {
               >
                 Close
               </button>
+              {previewInvoice.status !== 'paid' && previewInvoice.status !== 'cancelled' && (
+                <button
+                  onClick={() => {
+                    void markAsPaid(previewInvoice._id);
+                    setPreviewInvoice(null);
+                  }}
+                  className="h-9 px-3 rounded-md bg-green-600 text-white text-sm hover:bg-green-700 flex items-center gap-1"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Mark as Paid
+                </button>
+              )}
               <button
                 onClick={() => {
                   openPDF(previewInvoice._id);

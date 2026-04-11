@@ -234,16 +234,24 @@ async function _taskCompletionFallback() {
 }
 
 async function _productPerformanceFallback(limit) {
-  const { data: invoices } = await supabase
-    .from('invoices')
-    .select('price, product');
+  const [{ data: invoices }, { data: products }] = await Promise.all([
+    supabase.from('invoices').select('price, product'),
+    supabase.from('products').select('name, category')
+  ]);
+
+  const categoryMap = {};
+  (products || []).forEach(p => {
+    if (p.name) categoryMap[p.name] = p.category || 'Uncategorized';
+  });
 
   const map = {};
   (invoices || []).forEach(i => {
     if (!i.product) return;
-    if (!map[i.product]) map[i.product] = { _id: i.product, revenue: 0, count: 0 };
-    map[i.product].revenue += Number(i.price || 0);
-    map[i.product].count++;
+    const cat = categoryMap[i.product] || 'Uncategorized';
+    
+    if (!map[cat]) map[cat] = { _id: cat, revenue: 0, count: 0 };
+    map[cat].revenue += Number(i.price || 0);
+    map[cat].count++;
   });
 
   return Object.values(map)

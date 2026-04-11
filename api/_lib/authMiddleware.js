@@ -11,9 +11,9 @@ import { JWT_SECRET } from './jwtConfig.js';
 export function withAuth(handler) {
   return async (req, res) => {
     try {
-      // Allow preflight options
+      // Allow preflight options immediately
       if (req.method === 'OPTIONS') {
-        return handler(req, res);
+        return res.status(204).end();
       }
 
       // 1. Prefer Authorization: Bearer (SPA / localStorage) over cookies.
