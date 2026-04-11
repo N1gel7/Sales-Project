@@ -197,10 +197,13 @@ export default function MapViewSimple(): React.ReactElement {
     );
 
     const filtered = geoUploads.filter((u) => {
+      const userCode = u.user?.code || 'Unknown';
+      if (userCode.toLowerCase().includes('admin')) return false;
+      
       const cat = getMediaCategory(u.type);
       if (cat === 'image' && !filterImages) return false;
       if (cat === 'video' && !filterVideos) return false;
-      if (filterUser !== 'all' && (u.user?.code || 'Unknown') !== filterUser) return false;
+      if (filterUser !== 'all' && userCode !== filterUser) return false;
       return true;
     });
 
@@ -339,7 +342,7 @@ export default function MapViewSimple(): React.ReactElement {
   }
 
   return (
-    <div className="flex flex-col gap-0 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)]">
+    <div className="relative z-0 flex flex-col gap-0 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)]">
       <div className="flex flex-col justify-between gap-3 border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] px-4 py-3 sm:flex-row sm:items-center">
         <div>
           <p className="text-sm text-muted-foreground">

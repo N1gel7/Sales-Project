@@ -7,6 +7,10 @@ import { cn } from '@/lib/utils';
 type Location = { lat: number; lng: number } | null;
 
 export default function Uploads(): React.ReactElement {
+  const userInfo = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
+  const user = userInfo ? JSON.parse(userInfo) : null;
+  const isSales = user?.role === 'sales';
+
   const [location, setLocation] = useState<Location>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   
@@ -329,8 +333,9 @@ export default function Uploads(): React.ReactElement {
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-      <div className="w-full shrink-0 border-[var(--color-border-tertiary)] bg-[var(--surface)] lg:w-[360px] lg:border-r lg:pr-6">
-        <div className="card border-0 shadow-none lg:rounded-xl">
+      {isSales && (
+        <div className="w-full shrink-0 border-[var(--color-border-tertiary)] bg-[var(--surface)] lg:w-[360px] lg:border-r lg:pr-6">
+          <div className="card border-0 shadow-none lg:rounded-xl">
           <div className="card-header border-[var(--color-border-tertiary)] bg-transparent px-0 pt-0">Upload</div>
         <div className="card-body grid grid-cols-1 gap-4 px-0">
           <div className="space-y-2">
@@ -444,8 +449,9 @@ export default function Uploads(): React.ReactElement {
             </div>
           </div>
         </div>
+        </div>
       </div>
-      </div>
+      )}
 
       <div className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] p-4">
         <div className="mb-4 flex flex-wrap gap-1">
