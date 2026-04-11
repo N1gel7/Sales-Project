@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { api } from '../services/api';
 import LocationText from '../components/LocationText';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 type Location = { lat: number; lng: number } | null;
 
@@ -9,6 +11,7 @@ export default function Uploads(): React.ReactElement {
   const [locationError, setLocationError] = useState<string | null>(null);
   
   const [items, setItems] = useState<any[]>([]);
+  const [mediaFilter, setMediaFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
   const [note, setNote] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -198,7 +201,7 @@ export default function Uploads(): React.ReactElement {
       setInterimTranscription('');
     } else {
       if (!recognitionRef.current) {
-        alert("Your browser does not support Speech Recognition.");
+        toast.error('Speech recognition is not supported in this browser.');
         return;
       }
       
@@ -265,7 +268,7 @@ export default function Uploads(): React.ReactElement {
     if (file) {
       const maxSize = 25 * 1024 * 1024; // keep in sync with API Multer limit (25MB)
       if (file.size > maxSize) {
-        alert(`File too large. Maximum size is 25MB. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+        toast.error(`File too large (max 25MB). Yours is ${(file.size / 1024 / 1024).toFixed(2)}MB.`);
         e.target.value = '';
         return;
       }
@@ -277,7 +280,7 @@ export default function Uploads(): React.ReactElement {
 
   async function uploadFile() {
     if (!selectedFile) {
-      alert('Please select a file');
+      toast.error('Choose a file to upload.');
       return;
     }
     
@@ -302,19 +305,34 @@ export default function Uploads(): React.ReactElement {
       setInterimTranscription('');
       setSelectedFile(null);
       await load();
-      alert('Upload successful!');
+      toast.success('Upload complete.');
     } catch (error: any) {
-      alert('Upload failed: ' + (error.message || 'Unknown error'));
+      toast.error(error?.message || 'Upload failed.');
     } finally {
       setUploading(false);
     }
   }
 
+  const filteredItems = useMemo(() => {
+    return items.filter((upload) => {
+      const t = upload.type || '';
+      const isImage = t.startsWith('image/') || t === 'image';
+      const isVideo = t.startsWith('video/') || t === 'video';
+      const isAudio = t.startsWith('audio/') || t === 'audio';
+      if (mediaFilter === 'all') return true;
+      if (mediaFilter === 'image') return isImage;
+      if (mediaFilter === 'video') return isVideo;
+      if (mediaFilter === 'audio') return isAudio;
+      return true;
+    });
+  }, [items, mediaFilter]);
+
   return (
-    <div className="space-y-4">
-      <div className="card">
-        <div className="card-header">Upload Media via Web</div>
-        <div className="card-body grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className="w-full shrink-0 border-[var(--color-border-tertiary)] bg-[var(--surface)] lg:w-[360px] lg:border-r lg:pr-6">
+        <div className="card border-0 shadow-none lg:rounded-xl">
+          <div className="card-header border-[var(--color-border-tertiary)] bg-transparent px-0 pt-0">Upload</div>
+        <div className="card-body grid grid-cols-1 gap-4 px-0">
           <div className="space-y-2">
             <label className="text-sm font-medium">Select File</label>
             <input 
@@ -427,23 +445,44 @@ export default function Uploads(): React.ReactElement {
           </div>
         </div>
       </div>
+      </div>
 
-      <div className="card">
-        <div className="card-header">Your Pipeline Uploads</div>
-        <div className="card-body">
-          <ul className="divide-y divide-gray-100">
-            {items.length === 0 ? (
-              <li className="py-6 text-center text-sm text-gray-500">No uploads yet.</li>
+      <div className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] p-4">
+        <div className="mb-4 flex flex-wrap gap-1">
+          {(['all', 'image', 'video', 'audio'] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setMediaFilter(f)}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors',
+                mediaFilter === f ? 'bg-[var(--brand-dark)] text-white' : 'bg-[var(--surface)] text-muted-foreground shadow-sm'
+              )}
+            >
+              {f === 'all' ? 'All' : f}
+            </button>
+          ))}
+        </div>
+        <div className="[column-fill:_balance] [column-gap:12px] md:columns-2 xl:columns-3">
+            {filteredItems.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center [column-span:all]">
+                <svg width="120" height="100" viewBox="0 0 120 100" className="mb-4 text-muted-foreground/40" aria-hidden>
+                  <rect x="10" y="20" width="45" height="35" rx="4" fill="currentColor" opacity="0.2" />
+                  <rect x="65" y="15" width="40" height="50" rx="4" fill="currentColor" opacity="0.15" />
+                  <circle cx="35" cy="70" r="12" fill="currentColor" opacity="0.12" />
+                </svg>
+                <p className="text-sm text-muted-foreground">No uploads yet</p>
+              </div>
             ) : (
-              items.map((upload) => {
+              filteredItems.map((upload) => {
                 const t = upload.type || '';
                 const isImage = t.startsWith('image/') || t === 'image';
                 const isVideo = t.startsWith('video/') || t === 'video';
                 const isAudio = t.startsWith('audio/') || t === 'audio';
                 const mediaSrc = upload.fileUrl || upload.mediaUrl;
                 return (
-                  <li key={upload._id} className="py-4 flex flex-col md:flex-row md:items-start justify-between gap-4">
-                    <div className="flex-1 space-y-2">
+                  <div key={upload._id} className="mb-3 break-inside-avoid rounded-lg border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-3 shadow-sm transition-shadow hover:shadow-md">
+                    <div className="group relative space-y-2">
                       <div>
                         <div className="text-sm font-semibold text-slate-800">{upload.note || 'No textual note provided'}</div>
                         <div className="text-xs text-slate-500 mt-0.5">
@@ -478,36 +517,52 @@ export default function Uploads(): React.ReactElement {
                       )}
 
                       {mediaSrc && (
-                        <div className="mt-3 overflow-hidden rounded-lg border border-slate-200 bg-slate-50 w-full md:max-w-md">
+                        <div className="relative mt-2 overflow-hidden rounded-lg border border-[var(--color-border-tertiary)] bg-[var(--surface-2)]">
                           {isImage && (
-                            <img src={mediaSrc} alt="Upload" className="w-full h-auto object-cover max-h-64" />
+                            <img src={mediaSrc} alt="" className="max-h-56 w-full object-cover" />
                           )}
                           {isVideo && (
-                            <video src={mediaSrc} controls className="w-full bg-black max-h-64" />
+                            <video src={mediaSrc} controls className="max-h-56 w-full bg-black" />
                           )}
                           {isAudio && (
-                            <div className="p-3">
+                            <div className="space-y-2 p-3">
+                              <div className="h-10 w-full rounded bg-[var(--surface)]" />
                               <audio src={mediaSrc} controls className="w-full" />
                             </div>
                           )}
                           {!isImage && !isVideo && !isAudio && (
                             <div className="p-3">
-                              <a href={mediaSrc} target="_blank" rel="noreferrer" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 inline-flex items-center gap-1">
-                                <span>📄</span> Open attachment in new tab
+                              <a href={mediaSrc} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-[var(--accent-blue)]">
+                                Open file
                               </a>
                             </div>
                           )}
+                          <div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+                            <p className="line-clamp-2 text-xs text-white">{upload.note || '—'}</p>
+                            <p className="mt-1 text-[10px] text-white/80">
+                              {upload.coords?.lat != null && upload.coords?.lng != null ? (
+                                <LocationText lat={Number(upload.coords.lat)} lng={Number(upload.coords.lng)} />
+                              ) : (
+                                '—'
+                              )}
+                            </p>
+                          </div>
                         </div>
                       )}
                     </div>
-                    <div className="text-xs font-medium text-slate-400 whitespace-nowrap bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                      {upload.createdAt ? new Date(upload.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                    <div className="mt-2 text-[10px] font-medium text-muted-foreground">
+                      {upload.createdAt
+                        ? new Date(upload.createdAt).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })
+                        : '—'}
                     </div>
-                  </li>
+                  </div>
                 );
               })
             )}
-          </ul>
         </div>
       </div>
     </div>

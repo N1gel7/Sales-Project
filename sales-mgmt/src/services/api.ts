@@ -17,6 +17,9 @@ export const api = {
       body: { email, currentPassword, newPassword }
     });
   },
+  async forgotPassword(email: string) {
+    return http<{ message?: string }>('/api/forgot-password', { method: 'POST', body: { email } });
+  },
   async signup(name: string, email: string, password: string, role?: string, code?: string) {
     return http<LoginResponse>('/api/signup', { method: 'POST', body: { name, email, password, role, code } });
   },

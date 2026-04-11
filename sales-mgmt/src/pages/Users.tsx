@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { axiosInstance } from '../services/http';
+import { toast } from 'sonner';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { 
   Users as UsersIcon, 
   Plus, 
@@ -8,7 +10,6 @@ import {
   Mail, 
   Phone,
   Briefcase,
-  X,
   User 
 } from 'lucide-react';
 
@@ -69,9 +70,10 @@ const Users = () => {
     setError(null);
     try {
       const res = await axiosInstance.post('/api/users', formData);
-      setUsers([res.data, ...users]); // Prepend new user
+      setUsers([res.data, ...users]);
       setShowAddModal(false);
       setFormData({ name: '', email: '', role: 'sales', password: '' });
+      toast.success(`User ${res.data?.name ?? ''} created`.trim());
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create user');
     } finally {
@@ -148,27 +150,16 @@ const Users = () => {
         </div>
       )}
 
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm" 
-            onClick={() => setShowAddModal(false)}
-          ></div>
-          <div className="bg-white rounded-3xl w-full max-w-md relative z-10 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 p-6 flex justify-between items-center text-white">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <UserPlus className="h-6 w-6" />
-                Onboard New Member
-              </h2>
-              <button 
-                onClick={() => setShowAddModal(false)}
-                className="p-2 bg-white/20 hover:bg-white/30 rounded-full transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+      <Sheet open={showAddModal} onOpenChange={setShowAddModal}>
+        <SheetContent side="right" className="w-full max-w-md overflow-y-auto sm:max-w-md">
+          <SheetHeader className="border-b border-[var(--color-border-tertiary)] pb-4 text-left">
+            <SheetTitle className="page-title flex items-center gap-2 text-xl">
+              <UserPlus className="h-6 w-6 text-[var(--brand-green)]" />
+              New user
+            </SheetTitle>
+          </SheetHeader>
+
+            <form onSubmit={handleSubmit} className="mt-6 space-y-5">
               {error && (
                 <div className="p-3 bg-red-50 text-red-700 text-sm rounded-xl border border-red-100 flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-red-500 rounded-full" />
@@ -256,9 +247,8 @@ const Users = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

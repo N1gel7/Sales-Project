@@ -11,6 +11,7 @@ import {
 
 interface User {
   _id: string;
+  id?: string;
   name: string;
   email: string;
   role: string;
@@ -346,70 +347,62 @@ export default function ChatPage() {
   // ── Render ───────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex h-64 items-center justify-center rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--brand-green)] border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-xl font-semibold">Messages</h1>
+    <div className="flex h-[min(720px,calc(100vh-7rem))] min-h-[420px] overflow-hidden rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] shadow-sm">
+      <div className="flex w-[240px] shrink-0 flex-col bg-[var(--brand-dark)] text-white">
+        <div className="border-b border-white/10 p-3">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="page-title text-lg text-white">Messages</h2>
             <button
+              type="button"
               onClick={() => setShowNewChat(true)}
-              className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700"
+              className="rounded-full bg-[var(--brand-green)] p-2 text-white hover:opacity-90"
             >
               <Plus className="h-5 w-5" />
             </button>
           </div>
-          
-          {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
             <input
               type="text"
-              placeholder="Search conversations..."
+              placeholder="Search…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-white/15 bg-white/5 py-2 pl-10 pr-3 text-sm text-white placeholder:text-white/40 focus:border-[var(--brand-green)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-green)]"
             />
           </div>
         </div>
 
-        {/* Chat List */}
         <div className="flex-1 overflow-y-auto">
           {filteredChats.map((chat) => (
             <div
               key={chat._id}
               onClick={() => setSelectedChat(chat)}
-              className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 ${
-                selectedChat?._id === chat._id ? 'bg-blue-50 border-blue-200' : ''
+              className={`cursor-pointer border-b border-white/10 p-3 transition-colors hover:bg-white/5 ${
+                selectedChat?._id === chat._id ? 'bg-white/10' : ''
               }`}
             >
-              <div className="flex items-start space-x-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <Users className="h-6 w-6 text-blue-600" />
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+                  <Users className="h-5 w-5 text-white/90" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-gray-900 truncate">
-                      {chat.name}
-                    </h3>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="truncate text-sm font-medium text-white">{chat.name}</h3>
                     {getUnreadCount(chat) > 0 && (
-                      <span className="bg-blue-600 text-white text-xs rounded-full px-2 py-1">
+                      <span className="shrink-0 rounded-full bg-[var(--brand-green)] px-2 py-0.5 text-[10px] font-semibold text-white">
                         {getUnreadCount(chat)}
                       </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-500 truncate">
-                    {chat.lastMessage?.content || 'No messages yet'}
-                  </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="truncate text-xs text-white/55">{chat.lastMessage?.content || 'No messages yet'}</p>
+                  <p className="text-[10px] text-white/40">
                     {chat.lastMessage?.sentAt ? formatTime(chat.lastMessage.sentAt) : ''}
                   </p>
                 </div>
@@ -419,43 +412,39 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex min-w-0 flex-1 flex-col bg-[var(--surface)]">
         {selectedChat ? (
           <>
-            {/* Chat Header */}
-            <div className="bg-white border-b border-gray-200 p-4">
+            <div className="border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Users className="h-5 w-5 text-blue-600" />
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--surface-2)]">
+                    <Users className="h-5 w-5 text-[var(--brand-green)]" />
                   </div>
-                  <div 
-                    className="cursor-pointer hover:bg-gray-50 p-2 rounded-lg -m-2"
+                  <div
+                    className="-m-2 cursor-pointer rounded-lg p-2 hover:bg-[var(--surface-2)]"
                     onClick={() => setShowParticipants(true)}
                   >
-                    <h2 className="text-lg font-semibold">{selectedChat.name}</h2>
-                    <p className="text-sm text-gray-500">
-                      {selectedChat.participants.length} member{selectedChat.participants.length !== 1 ? 's' : ''} • Click to view
+                    <h2 className="text-base font-semibold text-foreground">{selectedChat.name}</h2>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedChat.participants.length} member{selectedChat.participants.length !== 1 ? 's' : ''} · online
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={() => setShowParticipants(true)}
-                    className="p-2 rounded-full hover:bg-gray-100"
-                  >
-                    <MoreVertical className="h-5 w-5 text-gray-600" />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowParticipants(true)}
+                  className="rounded-full p-2 hover:bg-[var(--surface-2)]"
+                >
+                  <MoreVertical className="h-5 w-5 text-muted-foreground" />
+                </button>
               </div>
             </div>
 
-            {/* Messages */}
             <div
               ref={messagesContainerRef}
               onScroll={handleScroll}
-              className="flex-1 overflow-y-auto p-4 space-y-4"
+              className="flex-1 space-y-4 overflow-y-auto p-4"
             >
               {messages.map((message) => (
                 <div
@@ -463,18 +452,18 @@ export default function ChatPage() {
                   className={`flex ${message.sender?.id === currentUserId ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
-                      message.sender?.id === currentUserId 
-                        ? 'bg-blue-600 text-white rounded-br-sm shadow-sm' 
-                        : 'bg-white text-gray-900 rounded-bl-sm border border-gray-200 shadow-sm'
+                    className={`max-w-xs rounded-2xl px-4 py-3 lg:max-w-md ${
+                      message.sender?.id === currentUserId
+                        ? 'rounded-br-sm bg-[var(--brand-dark)] text-white shadow-sm'
+                        : 'rounded-bl-sm border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] text-foreground shadow-sm'
                     }`}
                   >
                     {message.sender?.id !== currentUserId && (
-                      <div className="flex items-center space-x-2 mb-1.5">
-                        <span className="text-xs font-semibold text-blue-600">
+                      <div className="mb-1.5 flex items-center space-x-2">
+                        <span className="text-xs font-semibold text-[var(--accent-blue)]">
                           {message.sender?.name || 'Unknown'}
                         </span>
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-[10px] text-muted-foreground">
                           {formatTime(message.createdAt)}
                         </span>
                       </div>
@@ -501,7 +490,7 @@ export default function ChatPage() {
                     <p className="text-[15px] leading-relaxed">{message.content}</p>
                     
                     {message.sender?.id === currentUserId && (
-                      <div className="flex justify-end mt-1 text-[10px] text-blue-200">
+                      <div className="mt-1 flex justify-end text-[10px] text-white/70">
                         {formatTime(message.createdAt)}
                       </div>
                     )}
@@ -509,16 +498,15 @@ export default function ChatPage() {
                 </div>
               ))}
 
-              {/* Typing Indicator */}
               {typingText() && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 border border-gray-200 rounded-2xl px-4 py-2.5 flex items-center gap-2 shadow-sm">
+                  <div className="flex items-center gap-2 rounded-2xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] px-4 py-2.5 shadow-sm">
                     <div className="flex gap-1">
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '0ms' }} />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '150ms' }} />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground" style={{ animationDelay: '300ms' }} />
                     </div>
-                    <span className="text-xs text-gray-500 italic ml-1">{typingText()}…</span>
+                    <span className="ml-1 text-xs italic text-muted-foreground">{typingText()}…</span>
                   </div>
                 </div>
               )}
@@ -526,29 +514,32 @@ export default function ChatPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Message Input */}
-            <div className="bg-white border-t border-gray-200 p-4">
-              <div className="flex items-end space-x-2">
-                <button className="p-2.5 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors border border-gray-200 flex-shrink-0">
+            <div className="sticky bottom-0 border-t border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4">
+              <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  className="shrink-0 rounded-full border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] p-2.5 text-muted-foreground hover:border-[var(--brand-green)] hover:text-[var(--brand-green)]"
+                >
                   <Plus className="h-5 w-5" />
                 </button>
-                <div className="flex-1 bg-gray-50 border border-gray-200 rounded-3xl pb-2 pt-2 px-4 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+                <div className="flex-1 rounded-3xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] px-4 py-2 transition-all focus-within:border-[var(--brand-green)] focus-within:ring-1 focus-within:ring-[var(--brand-green)]/30">
                   <input
                     type="text"
                     value={messageText}
                     onChange={(e) => handleInputChange(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                    placeholder="Message..."
-                    className="w-full bg-transparent focus:outline-none text-[15px]"
+                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                    placeholder="Message…"
+                    className="w-full bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground focus:outline-none"
                   />
                 </div>
                 <button
+                  type="button"
                   onClick={sendMessage}
                   disabled={!messageText.trim() || sendingMessage}
-                  className="p-2 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="shrink-0 rounded-full bg-[var(--brand-green)] p-2.5 text-white hover:bg-[var(--brand-green-dark)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {sendingMessage ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                   ) : (
                     <Send className="h-5 w-5" />
                   )}
@@ -557,11 +548,11 @@ export default function ChatPage() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-1 items-center justify-center bg-[var(--surface)]">
             <div className="text-center">
-              <MessageCircle className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Select a conversation</h3>
-              <p className="text-gray-500">Choose a chat from the sidebar to start messaging</p>
+              <MessageCircle className="mx-auto mb-4 h-16 w-16 text-muted-foreground/40" />
+              <h3 className="mb-2 text-lg font-medium text-foreground">Select a conversation</h3>
+              <p className="text-sm text-muted-foreground">Choose a thread from the list to start messaging.</p>
             </div>
           </div>
         )}

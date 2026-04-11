@@ -1,7 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, Search, Calendar, MapPin, User, Clock } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useDroppable,
+  useDraggable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { Plus, Search, MapPin, GripVertical } from 'lucide-react';
 import LocationText from '../components/LocationText';
 import { getLocationLabel } from '../utils/locationLabel';
+import { StatusBadge } from '@/components/StatusBadge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 type Task = {
   _id: string;
@@ -15,12 +34,11 @@ type Task = {
   dueAt?: string;
   location?: { name?: string; coords?: { lat: number; lng: number } };
   comments: Array<{ text: string; author: { name: string; code: string }; createdAt: string }>;
-  notifications: Array<{ type: string; message: string; read: boolean; createdAt: string }>;
   createdAt: string;
   updatedAt: string;
 };
 
-type User = {
+type UserRow = {
   _id: string;
   name: string;
   code: string;
@@ -28,20 +46,129 @@ type User = {
   role: string;
 };
 
+type ColId = 'pending' | 'in_progress' | 'completed';
+
+const COLS: { id: ColId; label: string; labelClass: string; badgeClass: string }[] = [
+  { id: 'pending', label: 'Pending', labelClass: 'text-muted-foreground', badgeClass: 'bg-muted text-muted-foreground' },
+  { id: 'in_progress', label: 'In progress', labelClass: 'text-[var(--accent-blue)]', badgeClass: 'bg-[var(--accent-blue-light)] text-[var(--accent-blue)]' },
+  { id: 'completed', label: 'Completed', labelClass: 'text-[var(--brand-green-dark)]', badgeClass: 'bg-[var(--brand-green-light)] text-[var(--brand-green-dark)]' },
+];
+
+function taskColumn(t: Task): ColId {
+  if (t.status === 'completed') return 'completed';
+  if (t.status === 'in_progress') return 'in_progress';
+  return 'pending';
+}
+
+function colToApiStatus(col: ColId): Task['status'] {
+  if (col === 'completed') return 'completed';
+  if (col === 'in_progress') return 'in_progress';
+  return 'pending';
+}
+
+function initials(n: string) {
+  const p = n.trim().split(/\s+/);
+  if (p.length === 0) return '?';
+  if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+  return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+}
+
+function rel(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function DroppableCol({
+  id,
+  children,
+  className,
+}: {
+  id: ColId;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `col-${id}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'min-h-[320px] rounded-xl border border-dashed border-transparent bg-[var(--surface-2)]/50 p-2 transition-colors',
+        isOver && 'border-[var(--brand-green)]/40 bg-[var(--brand-green-light)]/30',
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DraggableCard({
+  task,
+  onOpen,
+}: {
+  task: Task;
+  onOpen: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: task._id,
+    data: { task },
+  });
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` }
+    : undefined;
+  const overdue = task.status === 'overdue' || (task.dueAt && new Date(task.dueAt) < new Date() && task.status !== 'completed');
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'mb-2 flex gap-2 rounded-lg border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-2 shadow-sm',
+        'hover:border-[var(--color-border-primary)]',
+        isDragging && 'opacity-60'
+      )}
+    >
+      <button
+        type="button"
+        className="mt-1 shrink-0 cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
+        {...listeners}
+        {...attributes}
+        aria-label="Drag task"
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onOpen()}>
+        <p className="text-[13px] font-medium leading-snug text-foreground">{task.title}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <Avatar className="h-7 w-7">
+            <AvatarFallback className="text-[10px]">
+              {task.assignee ? initials(task.assignee.name) : '?'}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-xs text-muted-foreground">{task.assignee?.name ?? 'Unassigned'}</span>
+          {task.dueAt && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+              {new Date(task.dueAt).toLocaleDateString()}
+            </span>
+          )}
+          {overdue && <span className="rounded-full bg-[var(--accent-red-light)] px-2 py-0.5 text-[10px] text-[var(--accent-red)]">Overdue</span>}
+        </div>
+      </button>
+    </div>
+  );
+}
+
 export default function Tasks(): React.ReactElement {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  
-  // Filters
-  const [statusFilter, setStatusFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
-  const [assigneeFilter, setAssigneeFilter] = useState('');
+  const [users, setUsers] = useState<UserRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'mine' | 'overdue'>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Task creation form
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -49,28 +176,44 @@ export default function Tasks(): React.ReactElement {
     dueAt: '',
     priority: 'medium',
     category: 'general',
-    location: { name: '', coords: null as { lat: number; lng: number } | null }
+    location: { name: '', coords: null as { lat: number; lng: number } | null },
   });
-  
-  // Task details modal
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [newComment, setNewComment] = useState('');
+  const [activeDrag, setActiveDrag] = useState<Task | null>(null);
+  const [wide, setWide] = useState(typeof window !== 'undefined' && window.innerWidth >= 1024);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onR = () => setWide(window.innerWidth >= 1024);
+    window.addEventListener('resize', onR);
+    return () => window.removeEventListener('resize', onR);
+  }, []);
+
+  useEffect(() => {
+    const raw = localStorage.getItem('user_info');
+    if (raw) {
+      try {
+        const u = JSON.parse(raw) as { id?: string; _id?: string; name?: string };
+        setCurrentUserId(u.id ?? u._id ?? null);
+        setCurrentUserName(u.name ?? null);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
 
   async function loadTasks() {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.append('status', statusFilter);
-      if (priorityFilter) params.append('priority', priorityFilter);
-      if (assigneeFilter) params.append('assignee', assigneeFilter);
-      
-      const response = await fetch(`/api/tasks?${params}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+      const response = await fetch(`/api/tasks`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
       });
       const data = await response.json();
       setTasks(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
+    } catch {
+      toast.error('Could not load tasks.');
     } finally {
       setLoading(false);
     }
@@ -79,49 +222,110 @@ export default function Tasks(): React.ReactElement {
   async function loadUsers() {
     try {
       const response = await fetch('/api/users', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
       });
       const data = await response.json();
-      setUsers(data);
-    } catch (error) {
-      console.error('Failed to load users:', error);
-    }
-  }
-
-  async function loadNotifications() {
-    try {
-      const response = await fetch('/api/notifications?unread=true', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-      });
-      const data = await response.json();
-      setNotifications(data);
-    } catch (error) {
-      console.error('Failed to load notifications:', error);
+      setUsers(Array.isArray(data) ? data : []);
+    } catch {
+      /* ignore */
     }
   }
 
   useEffect(() => {
-    loadTasks();
-    loadUsers();
-    loadNotifications();
-  }, [statusFilter, priorityFilter, assigneeFilter]);
+    void loadTasks();
+    void loadUsers();
+  }, []);
+
+  const filtered = useMemo(() => {
+    return tasks.filter((task) => {
+      if (searchTerm && !task.title.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+      if (filter === 'mine' && currentUserId && task.assignee?.id !== currentUserId) return false;
+      if (filter === 'overdue') {
+        const o = task.status === 'overdue' || (task.dueAt && new Date(task.dueAt) < new Date() && task.status !== 'completed');
+        if (!o) return false;
+      }
+      return true;
+    });
+  }, [tasks, searchTerm, filter, currentUserId]);
+
+  const byCol = useMemo(() => {
+    const m: Record<ColId, Task[]> = { pending: [], in_progress: [], completed: [] };
+    for (const t of filtered) {
+      if (t.status === 'cancelled') continue;
+      m[taskColumn(t)].push(t);
+    }
+    return m;
+  }, [filtered]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  async function updateTaskStatus(taskId: string, status: Task['status']) {
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify({ status }),
+      });
+      if (response.ok) {
+        toast.success('Task updated');
+        await loadTasks();
+        if (selectedTask?._id === taskId) {
+          const u = await fetch(`/api/tasks/${taskId}`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+          }).then((r) => r.json());
+          setSelectedTask(u);
+        }
+      } else {
+        const err = await response.json().catch(() => ({}));
+        toast.error(typeof err.error === 'string' ? err.error : 'Could not update task.');
+      }
+    } catch {
+      toast.error('Could not update task.');
+    }
+  }
+
+  function onDragEnd(e: DragEndEvent) {
+    setActiveDrag(null);
+    const { active, over } = e;
+    if (!over) return;
+    const taskId = String(active.id);
+    let targetCol: ColId | null = null;
+    const overId = String(over.id);
+    if (overId.startsWith('col-')) {
+      targetCol = overId.replace('col-', '') as ColId;
+    } else {
+      const hover = tasks.find((t) => t._id === overId);
+      if (hover) targetCol = taskColumn(hover);
+    }
+    if (!targetCol) return;
+    const t = tasks.find((x) => x._id === taskId);
+    if (!t) return;
+    const next = colToApiStatus(targetCol);
+    if (t.status === next || (taskColumn(t) === targetCol && next === t.status)) return;
+    if (t.status === 'overdue' && targetCol === 'pending') {
+      void updateTaskStatus(taskId, 'pending');
+      return;
+    }
+    void updateTaskStatus(taskId, next);
+  }
 
   async function createTask() {
     if (!newTask.title || !newTask.assigneeId) {
-      alert('Please fill in title and assignee');
+      toast.error('Add a title and assignee.');
       return;
     }
-
     try {
       const response = await fetch('/api/tasks', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
         },
-        body: JSON.stringify(newTask)
+        body: JSON.stringify(newTask),
       });
-
       if (response.ok) {
         setNewTask({
           title: '',
@@ -130,480 +334,277 @@ export default function Tasks(): React.ReactElement {
           dueAt: '',
           priority: 'medium',
           category: 'general',
-          location: { name: '', coords: null }
+          location: { name: '', coords: null },
         });
-        setShowCreateForm(false);
+        setShowCreate(false);
         await loadTasks();
-        await loadNotifications();
-        alert('Task created successfully!');
+        toast.success('Task created');
       } else {
-        const error = await response.json();
-        alert('Error creating task: ' + error.error);
+        const err = await response.json().catch(() => ({}));
+        toast.error(typeof err.error === 'string' ? err.error : 'Create failed');
       }
-    } catch (error) {
-      alert('Error creating task: ' + error);
-    }
-  }
-
-  async function updateTaskStatus(taskId: string, status: string) {
-    try {
-      const response = await fetch(`/api/tasks/${taskId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({ status })
-      });
-
-      if (response.ok) {
-        await loadTasks();
-        await loadNotifications();
-      } else {
-        const error = await response.json();
-        alert('Error updating task: ' + error.error);
-      }
-    } catch (error) {
-      alert('Error updating task: ' + error);
+    } catch {
+      toast.error('Create failed');
     }
   }
 
   async function addComment(taskId: string) {
     if (!newComment.trim()) return;
-
     try {
       const response = await fetch(`/api/tasks/${taskId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+          Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
         },
-        body: JSON.stringify({ text: newComment })
+        body: JSON.stringify({ text: newComment }),
       });
-
       if (response.ok) {
         setNewComment('');
         await loadTasks();
-        if (selectedTask) {
-          const updatedTask = await fetch(`/api/tasks/${taskId}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-          }).then(r => r.json());
-          setSelectedTask(updatedTask);
-        }
+        const updated = await fetch(`/api/tasks/${taskId}`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('auth_token')}` },
+        }).then((r) => r.json());
+        setSelectedTask(updated);
+        toast.success('Comment added');
       }
-    } catch (error) {
-      alert('Error adding comment: ' + error);
+    } catch {
+      toast.error('Could not add comment');
     }
   }
 
   function captureLocation() {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const locationLabel = await getLocationLabel(lat, lng);
-          setNewTask(prev => ({
-            ...prev,
-            location: {
-              name: locationLabel || 'Current Location',
-              coords: { lat, lng }
-            }
-          }));
-        },
-        () => alert('Location capture failed')
-      );
-    }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const locationLabel = await getLocationLabel(lat, lng);
+        setNewTask((prev) => ({
+          ...prev,
+          location: { name: locationLabel || 'Current location', coords: { lat, lng } },
+        }));
+      },
+      () => toast.error('Location unavailable')
+    );
   }
 
-  function getStatusColor(status: string) {
-    const colors = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      in_progress: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      overdue: 'bg-red-100 text-red-800',
-      cancelled: 'bg-gray-100 text-gray-800'
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  }
-
-  function getPriorityColor(priority: string) {
-    const colors = {
-      low: 'bg-gray-100 text-gray-800',
-      medium: 'bg-blue-100 text-blue-800',
-      high: 'bg-orange-100 text-orange-800',
-      urgent: 'bg-red-100 text-red-800'
-    };
-    return colors[priority as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  }
-
-  const filteredTasks = tasks.filter(task => {
-    if (searchTerm && !task.title.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
-    }
-    return true;
-  });
+  const detailPanel = selectedTask && (
+    <div className="flex h-full min-h-0 flex-col border-l border-[var(--color-border-tertiary)] bg-[var(--surface)]">
+      <div className="border-b border-[var(--color-border-tertiary)] p-4">
+        <p className="text-[14px] font-medium leading-snug">{selectedTask.title}</p>
+        <div className="mt-2">
+          <StatusBadge status={selectedTask.status} />
+        </div>
+      </div>
+      <div className="flex-1 space-y-4 overflow-y-auto p-4 text-sm">
+        <div>
+          <p className="text-xs text-muted-foreground">Assigned to</p>
+          <div className="mt-1 flex items-center gap-2">
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="text-xs">
+                {selectedTask.assignee ? initials(selectedTask.assignee.name) : '?'}
+              </AvatarFallback>
+            </Avatar>
+            <span>{selectedTask.assignee?.name ?? 'Unassigned'}</span>
+          </div>
+        </div>
+        {selectedTask.dueAt && (
+          <div>
+            <p className="text-xs text-muted-foreground">Due</p>
+            <p>{new Date(selectedTask.dueAt).toLocaleString()}</p>
+          </div>
+        )}
+        {selectedTask.description && (
+          <div>
+            <p className="text-xs text-muted-foreground">Description</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">{selectedTask.description}</p>
+          </div>
+        )}
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Comments</p>
+          <div className="space-y-3">
+            {(selectedTask.comments || []).map((c, i) => {
+              const mine = currentUserName && c.author?.name === currentUserName;
+              return (
+                <div
+                  key={i}
+                  className={cn('flex gap-2', mine && 'flex-row-reverse')}
+                >
+                  <Avatar className="h-7 w-7 shrink-0">
+                    <AvatarFallback className="text-[10px]">{initials(c.author?.name || '?')}</AvatarFallback>
+                  </Avatar>
+                  <div
+                    className={cn(
+                      'max-w-[85%] rounded-lg px-3 py-2 text-xs',
+                      mine ? 'bg-[var(--brand-dark)] text-white' : 'bg-[var(--surface-2)] text-foreground'
+                    )}
+                  >
+                    <p>{c.text}</p>
+                    <p className={cn('mt-1 text-[10px] opacity-70', mine ? 'text-white/80' : 'text-muted-foreground')}>
+                      {rel(c.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-[var(--color-border-tertiary)] p-3">
+        <Textarea
+          value={newComment}
+          onChange={(e) => setNewComment(e.target.value)}
+          placeholder="Write a reply…"
+          className="min-h-[72px] resize-none"
+        />
+        <Button className="mt-2 w-full bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]" onClick={() => void addComment(selectedTask._id)}>
+          Send
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-4">
-      {/* Header with notifications */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Task Management</h1>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 h-9 px-4 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" />
-            New Task
-          </button>
+    <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-4 lg:flex-row">
+      <div className="min-w-0 flex-1 space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 rounded-full border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-0.5">
+            {(['all', 'mine', 'overdue'] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium capitalize',
+                  filter === f ? 'bg-[var(--brand-dark)] text-white' : 'text-muted-foreground'
+                )}
+              >
+                {f === 'mine' ? 'Mine' : f}
+              </button>
+            ))}
+          </div>
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search tasks…"
+              className="pl-9"
+            />
+          </div>
+          <Button onClick={() => setShowCreate(true)} className="bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]">
+            <Plus className="mr-1 h-4 w-4" />
+            New task
+          </Button>
         </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-80 rounded-xl" />
+            ))}
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            onDragStart={(e) => {
+              const t = tasks.find((x) => x._id === e.active.id);
+              if (t) setActiveDrag(t);
+            }}
+            onDragEnd={onDragEnd}
+          >
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {COLS.map((col) => (
+                <div key={col.id}>
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <span className={cn('text-xs font-semibold uppercase tracking-wide', col.labelClass)}>{col.label}</span>
+                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', col.badgeClass)}>
+                      {byCol[col.id].length}
+                    </span>
+                  </div>
+                  <DroppableCol id={col.id}>
+                    {byCol[col.id].map((task) => (
+                      <DraggableCard key={task._id} task={task} onOpen={() => setSelectedTask(task)} />
+                    ))}
+                  </DroppableCol>
+                </div>
+              ))}
+            </div>
+            <DragOverlay>
+              {activeDrag ? (
+                <div className="rounded-lg border border-[var(--color-border-primary)] bg-[var(--surface)] p-3 shadow-lg">
+                  <p className="text-[13px] font-medium">{activeDrag.title}</p>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        )}
       </div>
 
-      {/* Filters */}
-      <div className="card">
-        <div className="card-body">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search tasks..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 h-9 border border-gray-200 rounded-md px-3 text-sm"
-              />
-            </div>
+      {wide && (
+        <div className="hidden w-[320px] shrink-0 lg:block">{selectedTask ? detailPanel : <div className="h-full rounded-xl border border-dashed border-[var(--color-border-tertiary)] p-6 text-center text-sm text-muted-foreground">Select a task</div>}</div>
+      )}
+
+      {!wide && (
+        <Sheet open={!!selectedTask && !wide} onOpenChange={(o) => !o && setSelectedTask(null)}>
+          <SheetContent side="right" className="w-full max-w-md p-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Task</SheetTitle>
+            </SheetHeader>
+            {selectedTask ? detailPanel : null}
+          </SheetContent>
+        </Sheet>
+      )}
+
+      <Sheet open={showCreate} onOpenChange={setShowCreate}>
+        <SheetContent className="overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>New task</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            <Input
+              placeholder="Title"
+              value={newTask.title}
+              onChange={(e) => setNewTask((p) => ({ ...p, title: e.target.value }))}
+            />
+            <Textarea
+              placeholder="Description"
+              value={newTask.description}
+              onChange={(e) => setNewTask((p) => ({ ...p, description: e.target.value }))}
+            />
             <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="h-9 border border-gray-200 rounded-md px-3 text-sm"
+              value={newTask.assigneeId}
+              onChange={(e) => setNewTask((p) => ({ ...p, assigneeId: e.target.value }))}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="completed">Completed</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-            <select
-              value={priorityFilter}
-              onChange={(e) => setPriorityFilter(e.target.value)}
-              className="h-9 border border-gray-200 rounded-md px-3 text-sm"
-            >
-              <option value="">All Priority</option>
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent</option>
-            </select>
-            <select
-              value={assigneeFilter}
-              onChange={(e) => setAssigneeFilter(e.target.value)}
-              className="h-9 border border-gray-200 rounded-md px-3 text-sm"
-            >
-              <option value="">All Assignees</option>
-              {users.map(user => (
-                <option key={user._id} value={user._id}>{user.name} ({user.code})</option>
+              <option value="">Assignee</option>
+              {users.map((u) => (
+                <option key={u._id} value={u._id}>
+                  {u.name}
+                </option>
               ))}
             </select>
-            <button
-              onClick={() => {
-                setStatusFilter('');
-                setPriorityFilter('');
-                setAssigneeFilter('');
-                setSearchTerm('');
-              }}
-              className="h-9 px-3 rounded-md border border-gray-200 text-sm hover:bg-gray-50"
-            >
-              Clear Filters
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Task List */}
-      <div className="card">
-        <div className="card-header flex items-center justify-between">
-          <div>Tasks ({filteredTasks.length})</div>
-          {loading && <div className="text-sm text-gray-500">Loading...</div>}
-        </div>
-        <div className="card-body">
-          <div className="space-y-3">
-            {filteredTasks.map((task) => (
-              <div key={task._id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-medium">{task.title}</h3>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                        {task.status.replace('_', ' ')}
-                      </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
-                        {task.priority}
-                      </span>
-                    </div>
-                    {task.description && (
-                      <p className="text-sm text-gray-600 mb-2">{task.description}</p>
-                    )}
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        {task.assignee
-                          ? `${task.assignee.name} (${task.assignee.code})`
-                          : 'Unassigned'}
-                      </div>
-                      {task.dueAt && (
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(task.dueAt).toLocaleDateString()}
-                        </div>
-                      )}
-                      {task.location?.name && (
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {task.location.name}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {new Date(task.createdAt).toLocaleDateString()}
-                      </div>
-                    </div>
-                    {(task.comments?.length ?? 0) > 0 && (
-                      <div className="mt-2 text-xs text-gray-500">
-                        {task.comments!.length} comment{task.comments!.length !== 1 ? 's' : ''}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    <button
-                      onClick={() => setSelectedTask(task)}
-                      className="h-8 px-3 rounded-md border border-gray-200 text-sm hover:bg-gray-50"
-                    >
-                      View
-                    </button>
-                    {task.status === 'pending' && (
-                      <button
-                        onClick={() => updateTaskStatus(task._id, 'in_progress')}
-                        className="h-8 px-3 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
-                      >
-                        Start
-                      </button>
-                    )}
-                    {task.status === 'in_progress' && (
-                      <button
-                        onClick={() => updateTaskStatus(task._id, 'completed')}
-                        className="h-8 px-3 rounded-md bg-green-600 text-white text-sm hover:bg-green-700"
-                      >
-                        Complete
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {filteredTasks.length === 0 && !loading && (
-              <div className="text-center py-8 text-gray-500">
-                No tasks found. {searchTerm || statusFilter || priorityFilter || assigneeFilter ? 'Try adjusting your filters.' : 'Create a new task to get started.'}
-              </div>
+            <Input
+              type="datetime-local"
+              value={newTask.dueAt}
+              onChange={(e) => setNewTask((p) => ({ ...p, dueAt: e.target.value }))}
+            />
+            <Button type="button" variant="outline" size="sm" onClick={captureLocation}>
+              <MapPin className="mr-1 h-4 w-4" />
+              Capture location
+            </Button>
+            {newTask.location?.coords && (
+              <p className="text-xs text-[var(--brand-green)]">
+                <LocationText lat={newTask.location.coords.lat} lng={newTask.location.coords.lng} />
+              </p>
             )}
+            <Button className="w-full bg-[var(--brand-green)] text-white" onClick={() => void createTask()}>
+              Create
+            </Button>
           </div>
-        </div>
-      </div>
-
-      {/* Create Task Modal */}
-      {showCreateForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-lg font-semibold mb-4">Create New Task</h2>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="Task title"
-                value={newTask.title}
-                onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
-              />
-              <textarea
-                placeholder="Description (optional)"
-                value={newTask.description}
-                onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full h-20 border border-gray-200 rounded-md px-3 py-2 text-sm resize-none"
-              />
-              <select
-                value={newTask.assigneeId}
-                onChange={(e) => setNewTask(prev => ({ ...prev, assigneeId: e.target.value }))}
-                className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
-              >
-                <option value="">Select assignee</option>
-                {users.map(user => (
-                  <option key={user._id} value={user._id}>{user.name} ({user.code})</option>
-                ))}
-              </select>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="datetime-local"
-                  value={newTask.dueAt}
-                  onChange={(e) => setNewTask(prev => ({ ...prev, dueAt: e.target.value }))}
-                  className="h-10 border border-gray-200 rounded-md px-3 text-sm"
-                />
-                <select
-                  value={newTask.priority}
-                  onChange={(e) => setNewTask(prev => ({ ...prev, priority: e.target.value }))}
-                  className="h-10 border border-gray-200 rounded-md px-3 text-sm"
-                >
-                  <option value="low">Low Priority</option>
-                  <option value="medium">Medium Priority</option>
-                  <option value="high">High Priority</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
-              <input
-                type="text"
-                placeholder="Category"
-                value={newTask.category}
-                onChange={(e) => setNewTask(prev => ({ ...prev, category: e.target.value }))}
-                className="w-full h-10 border border-gray-200 rounded-md px-3 text-sm"
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={captureLocation}
-                  className="flex items-center gap-2 h-9 px-3 rounded-md border border-gray-200 text-sm hover:bg-gray-50"
-                >
-                  <MapPin className="h-4 w-4" />
-                  Capture Location
-                </button>
-                {newTask.location?.coords && (
-                  <span className="text-xs text-green-600">
-                    📍 <LocationText lat={newTask.location.coords.lat} lng={newTask.location.coords.lng} />
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowCreateForm(false)}
-                className="h-9 px-4 rounded-md border border-gray-200 text-sm hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createTask}
-                className="h-9 px-4 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
-              >
-                Create Task
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Task Details Modal */}
-      {selectedTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="flex items-start justify-between mb-4">
-              <h2 className="text-lg font-semibold">{selectedTask.title}</h2>
-              <button
-                onClick={() => setSelectedTask(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="font-medium">Status:</span>
-                  <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedTask.status)}`}>
-                    {selectedTask.status.replace('_', ' ')}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium">Priority:</span>
-                  <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(selectedTask.priority)}`}>
-                    {selectedTask.priority}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium">Assignee:</span>
-                  <span className="ml-2">
-                    {selectedTask.assignee
-                      ? `${selectedTask.assignee.name} (${selectedTask.assignee.code})`
-                      : 'Unassigned'}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium">Created by:</span>
-                  <span className="ml-2">
-                    {selectedTask.createdBy
-                      ? `${selectedTask.createdBy.name} (${selectedTask.createdBy.code})`
-                      : '—'}
-                  </span>
-                </div>
-                {selectedTask.dueAt && (
-                  <div>
-                    <span className="font-medium">Due date:</span>
-                    <span className="ml-2">{new Date(selectedTask.dueAt).toLocaleString()}</span>
-                  </div>
-                )}
-                {selectedTask.location?.name && (
-                  <div>
-                    <span className="font-medium">Location:</span>
-                    <span className="ml-2">{selectedTask.location.name}</span>
-                  </div>
-                )}
-              </div>
-
-              {selectedTask.description && (
-                <div>
-                  <span className="font-medium">Description:</span>
-                  <p className="mt-1 text-sm text-gray-600">{selectedTask.description}</p>
-                </div>
-              )}
-
-              {/* Comments */}
-              <div>
-                <h3 className="font-medium mb-2">Comments</h3>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {(selectedTask.comments || []).map((comment, index) => (
-                    <div key={index} className="bg-gray-50 p-3 rounded-md">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-sm">{comment.author.name}</span>
-                        <span className="text-xs text-gray-500">{comment.author.code}</span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(comment.createdAt).toLocaleString()}
-                        </span>
-                      </div>
-                      <p className="text-sm">{comment.text}</p>
-                    </div>
-                  ))}
-                  {(selectedTask.comments || []).length === 0 && (
-                    <p className="text-sm text-gray-500">No comments yet</p>
-                  )}
-                </div>
-                
-                <div className="flex gap-2 mt-3">
-                  <input
-                    type="text"
-                    placeholder="Add a comment..."
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    className="flex-1 h-9 border border-gray-200 rounded-md px-3 text-sm"
-                  />
-                  <button
-                    onClick={() => addComment(selectedTask._id)}
-                    className="h-9 px-3 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
