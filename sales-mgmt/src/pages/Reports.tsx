@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { 
-  FileText, 
-  Plus, 
-  Search, 
-  Heart, 
-  MessageCircle, 
+import {
+  FileText,
+  Plus,
+  Search,
+  Heart,
+  MessageCircle,
   Share2,
   Download,
   Eye,
@@ -15,8 +15,14 @@ import {
   File,
   Video,
   Music,
-  X
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 interface User {
   _id: string;
@@ -88,6 +94,32 @@ interface UploadOption {
   createdAt: string;
 }
 
+type NewReportForm = {
+  title: string;
+  description: string;
+  type: Report['type'];
+  status: Report['status'];
+  attachments: Attachment[];
+  tags: string[];
+  visibility: Report['visibility'];
+  location: { lat: number; lng: number; address: string };
+  client: { name: string; contact: string; email: string };
+  project: { name: string; description: string; status: 'ongoing' | 'completed' | 'on_hold' };
+};
+
+const emptyReportForm = (): NewReportForm => ({
+  title: '',
+  description: '',
+  type: 'mood_board',
+  status: 'published',
+  attachments: [],
+  tags: [],
+  visibility: 'team',
+  location: { lat: 0, lng: 0, address: '' },
+  client: { name: '', contact: '', email: '' },
+  project: { name: '', description: '', status: 'ongoing' },
+});
+
 export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,6 +127,7 @@ export default function ReportsPage() {
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('published');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [detailReport, setDetailReport] = useState<Report | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showAuthorDetails, setShowAuthorDetails] = useState(false);
   const [selectedAuthor, setSelectedAuthor] = useState<any>(null);
@@ -102,19 +135,7 @@ export default function ReportsPage() {
   const [loadingUploads, setLoadingUploads] = useState(false);
   const [uploadSearchTerm, setUploadSearchTerm] = useState('');
 
-  // New report form state
-  const [newReport, setNewReport] = useState({
-    title: '',
-    description: '',
-    type: 'mood_board' as const,
-    status: 'published' as const,
-    attachments: [] as Attachment[],
-    tags: [] as string[],
-    visibility: 'team' as const,
-    location: { lat: 0, lng: 0, address: '' },
-    client: { name: '', contact: '', email: '' },
-    project: { name: '', description: '', status: 'ongoing' as const }
-  });
+  const [newReport, setNewReport] = useState<NewReportForm>(emptyReportForm);
 
   useEffect(() => {
     // Get current user ID from localStorage
@@ -166,11 +187,11 @@ export default function ReportsPage() {
 
   async function createReport() {
     if (!newReport.title.trim()) {
-      alert('Please enter a report title');
+      toast.error('Enter a report title.');
       return;
     }
     if (newReport.type === 'mood_board' && newReport.attachments.length === 0) {
-      alert('Please add at least one attachment for a mood board');
+      toast.error('Add at least one media item for a mood board.');
       return;
     }
 
@@ -188,25 +209,15 @@ export default function ReportsPage() {
         const report = await response.json();
         setReports(prev => [report, ...prev]);
         setShowCreateForm(false);
-        setNewReport({
-          title: '',
-          description: '',
-          type: 'mood_board',
-          status: 'published',
-          attachments: [],
-          tags: [],
-          visibility: 'team',
-          location: { lat: 0, lng: 0, address: '' },
-          client: { name: '', contact: '', email: '' },
-          project: { name: '', description: '', status: 'ongoing' }
-        });
+        setNewReport(emptyReportForm());
+        toast.success('Report created.');
       } else {
         const errorData = await response.json();
-        alert('Failed to create report: ' + (errorData.error || 'Unknown error'));
+        toast.error(typeof errorData.error === 'string' ? errorData.error : 'Could not create report.');
       }
     } catch (error) {
       console.error('Failed to create report:', error);
-      alert('Failed to create report: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error(error instanceof Error ? error.message : 'Could not create report.');
     }
   }
 
@@ -296,6 +307,26 @@ export default function ReportsPage() {
     return <File className="h-4 w-4" />;
   }
 
+  function typeLabel(t: Report['type']) {
+    const labels: Record<Report['type'], string> = {
+      mood_board: 'Mood board',
+      summary_report: 'Summary',
+      sales_report: 'Sales report',
+      client_feedback: 'Client feedback',
+    };
+    return labels[t] ?? t;
+  }
+
+  function typeBadgeClass(t: Report['type']) {
+    const map: Record<Report['type'], string> = {
+      mood_board: 'bg-[var(--accent-amber-light)] text-[var(--accent-amber)] border-[var(--accent-amber)]/25',
+      summary_report: 'bg-[var(--accent-blue-light)] text-[var(--accent-blue)] border-[var(--accent-blue)]/25',
+      sales_report: 'bg-[var(--brand-green-light)] text-[var(--brand-green-dark)] border-[var(--brand-green)]/30',
+      client_feedback: 'bg-violet-100 text-violet-800 border-violet-200/80',
+    };
+    return map[t] ?? map.summary_report;
+  }
+
 
   function formatDate(dateString: string) {
     return new Date(dateString).toLocaleDateString('en-GB', {
@@ -315,108 +346,157 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4">
+            <Skeleton className="mb-2 h-4 w-24" />
+            <Skeleton className="mb-3 h-6 w-full max-w-md" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        ))}
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reports & Mood Boards</h1>
-          <p className="text-gray-600">Share insights, mood boards, and team reports</p>
-        </div>
-        <button
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">Share insights, mood boards, and client feedback.</p>
+        <Button
+          type="button"
           onClick={() => setShowCreateForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]"
         >
-          <Plus className="h-5 w-5" />
-          Create Report
-        </button>
+          <Plus className="mr-2 h-4 w-4" />
+          New report
+        </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 mb-6">
-        <div className="flex-1 min-w-64">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search reports..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+        <div className="relative min-w-0 flex-1 lg:max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search title, description, tags…"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9"
+          />
         </div>
-        
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">All Types</option>
-          <option value="mood_board">Mood Board</option>
-          <option value="summary_report">Summary Report</option>
-          <option value="sales_report">Sales Report</option>
-          <option value="client_feedback">Client Feedback</option>
-        </select>
-        
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="published">Published</option>
-          <option value="draft">Draft</option>
-          <option value="archived">Archived</option>
-        </select>
+        <div className="flex flex-wrap gap-1">
+          {(['', 'mood_board', 'summary_report', 'sales_report', 'client_feedback'] as const).map((val) => {
+            const label =
+              val === ''
+                ? 'All types'
+                : val === 'mood_board'
+                  ? 'Mood board'
+                  : val === 'summary_report'
+                    ? 'Summary'
+                    : val === 'sales_report'
+                      ? 'Sales'
+                      : 'Feedback';
+            return (
+              <button
+                key={val || 'all'}
+                type="button"
+                onClick={() => setFilterType(val)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  filterType === val
+                    ? 'bg-[var(--brand-dark)] text-white'
+                    : 'bg-[var(--surface)] text-muted-foreground shadow-sm border border-[var(--color-border-tertiary)]'
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(['published', 'draft', 'archived'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setFilterStatus(s)}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium capitalize',
+                filterStatus === s
+                  ? 'bg-[var(--brand-dark)] text-white'
+                  : 'bg-[var(--surface-2)] text-muted-foreground'
+              )}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Reports Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         {filteredReports.map((report) => (
-          <div key={report._id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            {/* Report Header */}
-            <div className="p-4 border-b border-gray-100">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                    {report.title}
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-2">
-                    {report.description}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <User className="h-3 w-3" />
-                    <span 
-                      className="cursor-pointer hover:text-blue-600 hover:underline"
-                      onClick={() => {
+          <div
+            key={report._id}
+            role="button"
+            tabIndex={0}
+            onClick={() => setDetailReport(report)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setDetailReport(report);
+              }
+            }}
+            className="cursor-pointer overflow-hidden rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] shadow-sm transition-all hover:border-[var(--color-border-primary)] hover:shadow-md"
+          >
+            <div className="border-b border-[var(--color-border-tertiary)] p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <span
+                    className={cn(
+                      'mb-2 inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                      typeBadgeClass(report.type)
+                    )}
+                  >
+                    {typeLabel(report.type)}
+                  </span>
+                  <h3 className="mb-1 text-[15px] font-semibold leading-snug text-foreground">{report.title}</h3>
+                  <p className="mb-2 line-clamp-2 text-sm text-muted-foreground">{report.description}</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <User className="h-3 w-3 shrink-0" />
+                    <span
+                      className="cursor-pointer hover:text-[var(--brand-green)] hover:underline"
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setSelectedAuthor(report.author);
                         setShowAuthorDetails(true);
                       }}
                     >
                       {report.author.name}
                     </span>
-                    <Calendar className="h-3 w-3 ml-2" />
+                    <Calendar className="ml-1 h-3 w-3 shrink-0" />
                     <span>{formatDate(report.createdAt)}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex shrink-0 items-center gap-1">
                   <button
-                    onClick={() => toggleLike(report._id)}
-                    className={`p-1 rounded ${
-                      report.likes.some(like => like.user === currentUserId)
-                        ? 'text-red-500' 
-                        : 'text-gray-400 hover:text-red-500'
-                    }`}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggleLike(report._id);
+                    }}
+                    className={cn(
+                      'rounded p-1 transition-colors',
+                      report.likes.some((like) => like.user === currentUserId)
+                        ? 'text-red-600'
+                        : 'text-muted-foreground hover:text-red-600'
+                    )}
                   >
-                    <Heart className="h-4 w-4" />
+                    <Heart
+                      className={cn(
+                        'h-4 w-4',
+                        report.likes.some((like) => like.user === currentUserId) && 'fill-current'
+                      )}
+                    />
                   </button>
-                  <span className="text-xs text-gray-500">{report.likes.length}</span>
+                  <span className="text-xs text-muted-foreground">{report.likes.length}</span>
                 </div>
               </div>
             </div>
@@ -472,9 +552,9 @@ export default function ReportsPage() {
                   {report.tags.map((tag, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
+                      className="inline-flex items-center rounded-full border border-[var(--brand-green)]/25 bg-[var(--brand-green-light)] px-2 py-1 text-xs text-[var(--brand-green-dark)]"
                     >
-                      <Tag className="h-3 w-3 mr-1" />
+                      <Tag className="mr-1 h-3 w-3" />
                       {tag}
                     </span>
                   ))}
@@ -482,10 +562,9 @@ export default function ReportsPage() {
               </div>
             )}
 
-            {/* Actions */}
-            <div className="px-4 py-3 bg-gray-50 border-t border-gray-100">
+            <div className="border-t border-[var(--color-border-tertiary)] bg-[var(--surface-2)]/60 px-4 py-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4 text-sm text-gray-500">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <MessageCircle className="h-4 w-4" />
                     {report.comments.length}
@@ -495,11 +574,19 @@ export default function ReportsPage() {
                     {report.likes.length}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button className="p-1 text-gray-400 hover:text-gray-600">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="p-1 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Share2 className="h-4 w-4" />
                   </button>
-                  <button className="p-1 text-gray-400 hover:text-gray-600">
+                  <button
+                    type="button"
+                    className="p-1 text-muted-foreground hover:text-foreground"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <Download className="h-4 w-4" />
                   </button>
                 </div>
@@ -510,252 +597,272 @@ export default function ReportsPage() {
       </div>
 
       {filteredReports.length === 0 && (
-        <div className="text-center py-12">
-          <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No reports found</h3>
-          <p className="text-gray-500 mb-4">
-            {searchTerm ? 'Try adjusting your search terms' : 'Create your first report to get started'}
+        <div className="flex flex-col items-center rounded-xl border border-dashed border-[var(--color-border-tertiary)] bg-[var(--surface)] py-14 text-center">
+          <FileText className="mx-auto mb-4 h-14 w-14 text-muted-foreground/35" />
+          <h3 className="mb-2 text-lg font-medium text-foreground">No reports found</h3>
+          <p className="mb-4 max-w-sm text-sm text-muted-foreground">
+            {searchTerm ? 'Try a different search or clear filters.' : 'Create your first report to get started.'}
           </p>
-          <button
+          <Button
+            type="button"
             onClick={() => setShowCreateForm(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]"
           >
-            Create Report
-          </button>
+            New report
+          </Button>
         </div>
       )}
 
-      {/* Create Report Modal */}
-      {showCreateForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Create New Report</h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title *
-                  </label>
-                  <input
-                    type="text"
-                    value={newReport.title}
-                    onChange={(e) => setNewReport(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter report title"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    value={newReport.description}
-                    onChange={(e) => setNewReport(prev => ({ ...prev, description: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    rows={3}
-                    placeholder="Describe your report..."
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Type *
-                    </label>
-                    <select
-                      value={newReport.type}
-                      onChange={(e) => setNewReport(prev => ({ ...prev, type: e.target.value as any }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="mood_board">Mood Board</option>
-                      <option value="summary_report">Summary Report</option>
-                      <option value="sales_report">Sales Report</option>
-                      <option value="client_feedback">Client Feedback</option>
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Visibility
-                    </label>
-                    <select
-                      value={newReport.visibility}
-                      onChange={(e) => setNewReport(prev => ({ ...prev, visibility: e.target.value as any }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="team">Team</option>
-                      <option value="public">Public</option>
-                      <option value="private">Private</option>
-                    </select>
-                  </div>
-                </div>
+      <Sheet open={showCreateForm} onOpenChange={setShowCreateForm}>
+        <SheetContent side="right" className="w-full max-w-lg overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle className="page-title text-left">New report</SheetTitle>
+          </SheetHeader>
+          <div className="mt-6 space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium">Title *</label>
+              <Input
+                value={newReport.title}
+                onChange={(e) => setNewReport((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="Report title"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Description</label>
+              <Textarea
+                value={newReport.description}
+                onChange={(e) => setNewReport((prev) => ({ ...prev, description: e.target.value }))}
+                rows={3}
+                placeholder="Summary for your team…"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Type</label>
+                <select
+                  value={newReport.type}
+                  onChange={(e) => setNewReport((prev) => ({ ...prev, type: e.target.value as Report['type'] }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="mood_board">Mood board</option>
+                  <option value="summary_report">Summary report</option>
+                  <option value="sales_report">Sales report</option>
+                  <option value="client_feedback">Client feedback</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Visibility</label>
+                <select
+                  value={newReport.visibility}
+                  onChange={(e) =>
+                    setNewReport((prev) => ({ ...prev, visibility: e.target.value as Report['visibility'] }))
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="team">Team</option>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                </select>
+              </div>
+            </div>
 
-                {newReport.type === 'mood_board' && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Mood Board Media *
-                      </label>
-                      <span className="text-xs text-gray-500">{newReport.attachments.length} selected</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={uploadSearchTerm}
-                      onChange={(e) => setUploadSearchTerm(e.target.value)}
-                      placeholder="Search uploads by filename..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {loadingUploads ? (
-                      <div className="text-sm text-gray-500 py-3">Loading uploads...</div>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto border border-gray-200 rounded-md p-2">
-                        {availableUploads
-                          .filter((u) => u.filename.toLowerCase().includes(uploadSearchTerm.toLowerCase()))
-                          .slice(0, 60)
-                          .map((upload) => {
-                            const selected = isAttachmentSelected(upload.fileUrl);
-                            const isImage = upload.type.startsWith('image/');
-                            return (
-                              <button
-                                key={upload._id}
-                                type="button"
-                                onClick={() => toggleMoodBoardAttachment(upload)}
-                                className={`relative text-left rounded-md overflow-hidden border ${selected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200 hover:border-gray-300'}`}
-                              >
-                                {isImage ? (
-                                  <img src={upload.fileUrl || ''} alt={upload.filename} className="w-full h-20 object-cover" />
-                                ) : (
-                                  <div className="w-full h-20 bg-gray-100 flex items-center justify-center text-gray-500">
-                                    {getAttachmentIcon(upload.type)}
-                                  </div>
-                                )}
-                                <div className="p-1.5">
-                                  <p className="text-[11px] text-gray-700 truncate">{upload.filename}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                      </div>
-                    )}
+            {newReport.type === 'mood_board' && (
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium">Mood board media *</label>
+                  <span className="text-xs text-muted-foreground">{newReport.attachments.length} selected</span>
+                </div>
+                <Input
+                  value={uploadSearchTerm}
+                  onChange={(e) => setUploadSearchTerm(e.target.value)}
+                  placeholder="Filter uploads…"
+                  className="mb-3"
+                />
+                {loadingUploads ? (
+                  <p className="py-3 text-sm text-muted-foreground">Loading uploads…</p>
+                ) : (
+                  <div className="grid max-h-56 grid-cols-2 gap-2 overflow-y-auto rounded-md border border-[var(--color-border-tertiary)] p-2 sm:grid-cols-3">
+                    {availableUploads
+                      .filter((u) => u.filename.toLowerCase().includes(uploadSearchTerm.toLowerCase()))
+                      .slice(0, 60)
+                      .map((upload) => {
+                        const selected = isAttachmentSelected(upload.fileUrl);
+                        const isImage = upload.type.startsWith('image/');
+                        return (
+                          <button
+                            key={upload._id}
+                            type="button"
+                            onClick={() => toggleMoodBoardAttachment(upload)}
+                            className={cn(
+                              'relative overflow-hidden rounded-md border text-left transition-shadow',
+                              selected
+                                ? 'border-[var(--brand-green)] ring-2 ring-[var(--brand-green)]/25'
+                                : 'border-[var(--color-border-tertiary)] hover:border-[var(--color-border-primary)]'
+                            )}
+                          >
+                            {isImage ? (
+                              <img
+                                src={upload.fileUrl || ''}
+                                alt=""
+                                className="h-20 w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-20 w-full items-center justify-center bg-[var(--surface-2)] text-muted-foreground">
+                                {getAttachmentIcon(upload.type)}
+                              </div>
+                            )}
+                            <div className="p-1.5">
+                              <p className="truncate text-[11px] text-foreground">{upload.filename}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
                   </div>
                 )}
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tags
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter tags separated by commas"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        const tags = e.currentTarget.value.split(',').map(tag => tag.trim()).filter(tag => tag);
-                        setNewReport(prev => ({ ...prev, tags: [...prev.tags, ...tags] }));
-                        e.currentTarget.value = '';
-                      }
-                    }}
-                  />
-                  {newReport.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {newReport.tags.map((tag, index) => (
-                        <span
-                          key={index}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800"
-                        >
-                          {tag}
-                          <button
-                            onClick={() => setNewReport(prev => ({ 
-                              ...prev, 
-                              tags: prev.tags.filter((_, i) => i !== index) 
-                            }))}
-                            className="ml-1 text-blue-600 hover:text-blue-800"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
               </div>
-              
-              <div className="flex gap-2 mt-6">
-                <button
-                  onClick={() => setShowCreateForm(false)}
-                  className="flex-1 px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={createReport}
-                  disabled={!newReport.title.trim()}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Create Report
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+            )}
 
-      {/* Author Details Modal */}
-      {showAuthorDetails && selectedAuthor && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Author Details</h3>
-              <button
-                onClick={() => setShowAuthorDetails(false)}
-                className="p-1 rounded-full hover:bg-gray-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div className="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <span className="text-lg font-medium text-blue-600">
-                    {selectedAuthor.name?.charAt(0)?.toUpperCase() || 'U'}
-                  </span>
+            <div>
+              <label className="mb-1 block text-sm font-medium">Tags</label>
+              <Input
+                placeholder="Comma-separated, press Enter"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const v = (e.target as HTMLInputElement).value;
+                    const tags = v
+                      .split(',')
+                      .map((tag) => tag.trim())
+                      .filter(Boolean);
+                    if (tags.length) {
+                      setNewReport((prev) => ({ ...prev, tags: [...prev.tags, ...tags] }));
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }
+                }}
+              />
+              {newReport.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {newReport.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center rounded-full border border-[var(--brand-green)]/30 bg-[var(--brand-green-light)] px-2 py-1 text-xs text-[var(--brand-green-dark)]"
+                    >
+                      {tag}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNewReport((prev) => ({
+                            ...prev,
+                            tags: prev.tags.filter((_, i) => i !== index),
+                          }))
+                        }
+                        className="ml-1 text-[var(--brand-green-dark)] hover:opacity-80"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-gray-900 text-lg">
-                    {selectedAuthor.name || 'Unknown User'}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {selectedAuthor.role || 'Member'}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between py-2 border-b border-gray-100">
-                  <span className="text-sm text-gray-600">Role:</span>
-                  <span className="text-sm font-medium">{selectedAuthor.role || 'Member'}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b border-gray-100">
-                  <span className="text-sm text-gray-600">User ID:</span>
-                  <span className="text-sm font-mono text-gray-500">{selectedAuthor.id || 'N/A'}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <button
-                onClick={() => setShowAuthorDetails(false)}
-                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-              >
-                Close
-              </button>
+              )}
             </div>
           </div>
-        </div>
-      )}
+          <div className="mt-8 flex gap-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={() => setShowCreateForm(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={!newReport.title.trim()}
+              className="flex-1 bg-[var(--brand-green)] text-white hover:bg-[var(--brand-green-dark)]"
+              onClick={() => void createReport()}
+            >
+              Create
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={showAuthorDetails} onOpenChange={setShowAuthorDetails}>
+        <SheetContent className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle className="page-title text-left">Author</SheetTitle>
+          </SheetHeader>
+          {selectedAuthor && (
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center gap-3 rounded-lg border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] p-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--brand-green-light)] text-lg font-medium text-[var(--brand-green-dark)]">
+                  {selectedAuthor.name?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">{selectedAuthor.name || 'Unknown'}</p>
+                  <p className="text-sm text-muted-foreground">{selectedAuthor.role || 'Member'}</p>
+                </div>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between border-b border-[var(--color-border-tertiary)] py-2">
+                  <span className="text-muted-foreground">Role</span>
+                  <span className="font-medium">{selectedAuthor.role || '—'}</span>
+                </div>
+                <div className="flex justify-between border-b border-[var(--color-border-tertiary)] py-2">
+                  <span className="text-muted-foreground">User ID</span>
+                  <span className="font-mono text-xs text-muted-foreground">{selectedAuthor.id || '—'}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!detailReport} onOpenChange={(o) => !o && setDetailReport(null)}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle className="page-title text-left">{detailReport?.title}</SheetTitle>
+          </SheetHeader>
+          {detailReport && (
+            <div className="mt-6 space-y-4">
+              <span className={cn('inline-block rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase', typeBadgeClass(detailReport.type))}>
+                {typeLabel(detailReport.type)}
+              </span>
+              <p className="text-sm text-muted-foreground">{detailReport.description}</p>
+              <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                <span>{detailReport.author.name}</span>
+                <span>·</span>
+                <span>{formatDate(detailReport.createdAt)}</span>
+              </div>
+              {detailReport.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {detailReport.tags.map((tag, i) => (
+                    <span
+                      key={i}
+                      className="rounded-full border border-[var(--brand-green)]/25 bg-[var(--brand-green-light)] px-2 py-0.5 text-xs text-[var(--brand-green-dark)]"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {detailReport.attachments.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {detailReport.attachments.slice(0, 8).map((a, i) => (
+                    <div key={i} className="overflow-hidden rounded-lg border border-[var(--color-border-tertiary)]">
+                      {a.type.startsWith('image/') ? (
+                        <img src={a.thumbnail || a.url} alt="" className="h-24 w-full object-cover" />
+                      ) : (
+                        <div className="flex h-24 items-center justify-center bg-[var(--surface-2)]">
+                          {getAttachmentIcon(a.type)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground">
+                {detailReport.comments.length} comments · {detailReport.likes.length} reactions
+              </p>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -1,17 +1,21 @@
-import { useEffect, useState } from 'react';
-import { 
-  Users, 
-  CheckCircle, 
-  DollarSign, 
-  Calendar,
-  Filter,
-  MapPin,
-  Package,
-  Activity,
-  BarChart3
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import Chart from 'react-apexcharts';
+import {
+  DollarSign,
+  CheckCircle,
+  Users,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Upload,
+} from 'lucide-react';
+import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import LocationText from '../components/LocationText';
+import { useShell } from '../context/ShellContext';
+import { StatusBadge } from '@/components/StatusBadge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
 type DashboardStats = {
   taskStats: Record<string, number>;
@@ -37,14 +41,11 @@ type DashboardStats = {
     count: number;
   }>;
   locationActivity: Array<{
-    _id: { lat: number; lng: number };
+    _id: { lat: number; lng: number } | string;
     count: number;
     types: string[];
   }>;
-  dateRange: {
-    start: string;
-    end: string;
-  };
+  dateRange: { start: string; end: string };
 };
 
 type Activity = {
@@ -53,37 +54,65 @@ type Activity = {
   action: string;
   user: string;
   timestamp: string;
-  data: any;
+  data: unknown;
 };
 
+type TaskRow = {
+  _id: string;
+  title: string;
+  status: string;
+  assignee: { name: string } | null;
+  dueAt?: string;
+};
+
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(amount);
+}
+
+function formatDate(d: string) {
+  return new Date(d).toLocaleDateString();
+}
+
+function relTime(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 export default function Dashboard(): React.ReactElement {
+  const { dateRange } = useShell();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [openTasks, setOpenTasks] = useState<TaskRow[]>([]);
+  const [uploadCount, setUploadCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState({
-    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
-  });
+  const [userId, setUserId] = useState<string | null>(null);
+  const [mapFilterImg, setMapFilterImg] = useState(true);
+  const [mapFilterVid, setMapFilterVid] = useState(true);
 
   useEffect(() => {
-    const userInfo = localStorage.getItem('user_info');
-    if (userInfo) {
-      try {
-        setRole(JSON.parse(userInfo).role);
-      } catch (e) {
-        console.error('Failed to parse user info', e);
-      }
+    const raw = localStorage.getItem('user_info');
+    if (!raw) return;
+    try {
+      const u = JSON.parse(raw) as { role?: string; id?: string; _id?: string };
+      setRole(u.role ?? null);
+      setUserId(u.id ?? u._id ?? null);
+    } catch {
+      /* ignore */
     }
   }, []);
 
   async function loadDashboard() {
-    // Check if user is authenticated
     const token = localStorage.getItem('auth_token');
     if (!token) {
       setLoading(false);
-      setError('Please login to view dashboard data');
+      setError('Please sign in to view the dashboard.');
       return;
     }
 
@@ -92,25 +121,24 @@ export default function Dashboard(): React.ReactElement {
     try {
       const params = new URLSearchParams({
         startDate: dateRange.start,
-        endDate: dateRange.end
+        endDate: dateRange.end,
       });
+      const r = role;
+      const uid = userId;
+      if (r === 'sales' && uid) params.set('userId', uid);
 
-      // Add timeout to prevent hanging
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = window.setTimeout(() => controller.abort(), 12000);
 
-      const [statsRes, activityRes] = await Promise.all([
-        fetch(`/api/dashboard/stats?${params}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-          signal: controller.signal
-        }),
-        fetch('/api/dashboard/activity?limit=5', {
-          headers: { 'Authorization': `Bearer ${token}` },
-          signal: controller.signal
-        })
+      const headers = { Authorization: `Bearer ${token}` };
+      const [statsRes, activityRes, tasksRes, uploadsRes] = await Promise.all([
+        fetch(`/api/dashboard/stats?${params}`, { headers, signal: controller.signal }),
+        fetch('/api/dashboard/activity?limit=5', { headers, signal: controller.signal }),
+        fetch('/api/tasks', { headers, signal: controller.signal }),
+        fetch('/api/uploads', { headers, signal: controller.signal }).catch(() => null),
       ]);
 
-      clearTimeout(timeoutId);
+      window.clearTimeout(timeoutId);
 
       if (statsRes.status === 401 || activityRes.status === 401) {
         localStorage.removeItem('auth_token');
@@ -119,20 +147,35 @@ export default function Dashboard(): React.ReactElement {
       }
 
       if (!statsRes.ok || !activityRes.ok) {
-        throw new Error('Failed to fetch dashboard data');
+        throw new Error('Could not load dashboard data.');
       }
 
-      const statsData = await statsRes.json();
+      const statsData = (await statsRes.json()) as DashboardStats;
       const activityData = await activityRes.json();
-
       setStats(statsData);
       setActivities(Array.isArray(activityData) ? activityData : []);
-    } catch (error: unknown) {
-      console.error('Failed to load dashboard:', error);
-      if (error instanceof Error && error.name === 'AbortError') {
-        setError('Request timed out. Please try again.');
+
+      if (tasksRes.ok) {
+        const td = await tasksRes.json();
+        const arr = Array.isArray(td) ? td : [];
+        const open = arr
+          .filter(
+            (t: TaskRow) =>
+              t.status === 'pending' || t.status === 'in_progress' || t.status === 'overdue'
+          )
+          .slice(0, 5) as TaskRow[];
+        setOpenTasks(open);
+      }
+
+      if (uploadsRes?.ok) {
+        const ud = await uploadsRes.json();
+        setUploadCount(Array.isArray(ud) ? ud.length : 0);
+      }
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        setError('Request timed out. Try again.');
       } else {
-        setError('Failed to load dashboard data. Please check your connection.');
+        setError('We could not load the dashboard. Check your connection and try again.');
       }
     } finally {
       setLoading(false);
@@ -140,50 +183,83 @@ export default function Dashboard(): React.ReactElement {
   }
 
   useEffect(() => {
-    loadDashboard();
-  }, [dateRange]);
+    void loadDashboard();
+  }, [dateRange.start, dateRange.end, role, userId]);
 
-  function formatCurrency(amount: number) {
-    return new Intl.NumberFormat('en-GH', {
-      style: 'currency',
-      currency: 'GHS'
-    }).format(amount);
-  }
+  const mapPoints = useMemo(() => {
+    if (!stats?.locationActivity?.length) return [];
+    return stats.locationActivity
+      .map((loc, idx) => {
+        let lat: number | undefined;
+        let lng: number | undefined;
+        const id = loc._id;
+        if (id && typeof id === 'object') {
+          lat = id.lat;
+          lng = id.lng;
+        } else if (typeof id === 'string') {
+          try {
+            const p = JSON.parse(id) as { lat?: number; lng?: number };
+            lat = p.lat;
+            lng = p.lng;
+          } catch {
+            /* ignore */
+          }
+        }
+        if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        const types = Array.isArray(loc.types) ? loc.types : [];
+        const isImg = types.some((t) => /image/i.test(t));
+        const isVid = types.some((t) => /video/i.test(t));
+        if (!mapFilterImg && isImg && !isVid) return null;
+        if (!mapFilterVid && isVid && !isImg) return null;
+        if (!mapFilterImg && !mapFilterVid) return null;
+        return { lat, lng, count: loc.count, types, idx };
+      })
+      .filter(Boolean) as Array<{ lat: number; lng: number; count: number; types: string[]; idx: number }>;
+  }, [stats?.locationActivity, mapFilterImg, mapFilterVid]);
 
-  function formatDate(date: string) {
-    return new Date(date).toLocaleDateString();
-  }
+  const center = useMemo(() => {
+    if (mapPoints.length) return [mapPoints[0].lat, mapPoints[0].lng] as [number, number];
+    return [5.6037, -0.187] as [number, number];
+  }, [mapPoints]);
 
-  function getStatusColor(status: string) {
-    const colors = {
-      pending: 'text-yellow-600 bg-yellow-100',
-      in_progress: 'text-blue-600 bg-blue-100',
-      completed: 'text-green-600 bg-green-100',
-      overdue: 'text-red-600 bg-red-100',
-      cancelled: 'text-gray-600 bg-gray-100'
+  const barSeries = useMemo(() => {
+    const pp = stats?.productPerformance?.slice(0, 6) ?? [];
+    return {
+      cats: pp.map((p) => p._id),
+      vals: pp.map((p) => p.revenue ?? 0),
     };
-    return colors[status as keyof typeof colors] || 'text-gray-600 bg-gray-100';
-  }
+  }, [stats?.productPerformance]);
 
-  if (loading) {
+  const sparkSeries = useMemo(() => {
+    const ds = stats?.dailySales?.slice(-7) ?? [];
+    return ds.map((d) => d.revenue ?? 0);
+  }, [stats?.dailySales]);
+
+  if (loading && !stats) {
     return (
-      <div className="text-center py-8">
-        <div className="flex items-center justify-center space-x-2">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <p className="text-gray-600">Loading dashboard...</p>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-xl" />
+          ))}
         </div>
-        <p className="text-sm text-gray-500 mt-2">This may take a few seconds</p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Skeleton className="h-80 rounded-xl lg:col-span-1" />
+          <Skeleton className="h-80 rounded-xl lg:col-span-1" />
+          <Skeleton className="h-80 rounded-xl lg:col-span-1" />
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-center py-8">
-        <p className="text-red-600">{error}</p>
-        <button 
-          onClick={loadDashboard}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+      <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-6 text-center text-sm text-destructive">
+        {error}
+        <button
+          type="button"
+          className="mt-3 block w-full rounded-lg bg-[var(--brand-dark)] py-2 text-white"
+          onClick={() => void loadDashboard()}
         >
           Retry
         </button>
@@ -193,420 +269,308 @@ export default function Dashboard(): React.ReactElement {
 
   if (!stats) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-600">No dashboard data available</p>
-        <button 
-          onClick={loadDashboard}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
+      <div className="text-center text-muted-foreground">
+        No dashboard data.
+        <button type="button" className="mt-2 block text-[var(--brand-green)]" onClick={() => void loadDashboard()}>
           Retry
         </button>
       </div>
     );
   }
 
+  const ts = stats.taskStats || {};
+  const completed = ts.completed ?? 0;
+  const revenue = stats.salesStats?.totalRevenue ?? 0;
+  const team = stats.employeeActivity?.length ?? 0;
+  const avgInv = stats.salesStats?.averageInvoice ?? 0;
+
+  function KpiCard({
+    label,
+    value,
+    sub,
+    delta,
+    icon: Icon,
+  }: {
+    label: string;
+    value: string;
+    sub?: string;
+    delta?: number;
+    icon: React.ElementType;
+  }) {
+    const up = delta != null && delta >= 0;
+    return (
+      <div className="rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+            <p className="page-title mt-1 text-[26px] leading-none text-foreground">{value}</p>
+            {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+          </div>
+          <div className="rounded-lg bg-[var(--surface-2)] p-2">
+            <Icon className="h-5 w-5 text-[var(--brand-green)]" />
+          </div>
+        </div>
+        {delta != null && (
+          <p
+            className={cn(
+              'mt-3 flex items-center gap-1 text-xs font-medium',
+              up ? 'text-[var(--brand-green-dark)]' : 'text-[var(--accent-red)]'
+            )}
+          >
+            {up ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+            {up ? '+' : ''}
+            {delta}% vs prior period
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const showAdminKpis = role === 'admin';
+  const showManagerKpis = role === 'manager';
+  const showSalesKpis = role === 'sales';
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard Analytics</h1>
-            <p className="text-gray-600 flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              <span>
-                {stats?.dateRange ? `${formatDate(stats.dateRange.start)} - ${formatDate(stats.dateRange.end)}` : 'Loading...'}
-              </span>
-            </p>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Date Range Picker */}
-            <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 p-2 shadow-sm">
-              <Calendar className="h-4 w-4 text-gray-500" />
-              <div className="flex items-center gap-2">
-                <input
-                  type="date"
-                  value={dateRange.start}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                  className="px-3 py-2 border border-gray-200 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                <span className="text-gray-500 text-sm">to</span>
-                <input
-                  type="date"
-                  value={dateRange.end}
-                  onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                  className="px-3 py-2 border border-gray-200 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-            
-            {/* Refresh Button */}
-            <button
-              onClick={loadDashboard}
-              className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
-            >
-              <Filter className="h-4 w-4" />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        {stats.dateRange
+          ? `${formatDate(stats.dateRange.start)} – ${formatDate(stats.dateRange.end)}`
+          : `${formatDate(dateRange.start)} – ${formatDate(dateRange.end)}`}
+      </p>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {(role === 'admin' || role === 'manager') && (
-          <div className="card card-hover card-gradient">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
-                  <p className="text-3xl font-bold text-green-600">
-                    {formatCurrency(stats?.salesStats?.totalRevenue || 0)}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-sm text-gray-500">
-                  {stats?.salesStats?.totalInvoices || 0} invoices
-                </p>
-                <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                  +12%
-                </span>
-              </div>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {showAdminKpis && (
+          <>
+            <KpiCard
+              label="Total revenue"
+              value={formatCurrency(revenue)}
+              sub={`${stats.salesStats?.totalInvoices ?? 0} invoices`}
+              delta={12}
+              icon={DollarSign}
+            />
+            <KpiCard label="Tasks completed" value={String(completed)} sub={`${ts.pending ?? 0} pending`} delta={4} icon={CheckCircle} />
+            <KpiCard label="Active team" value={String(team)} sub="members" delta={2} icon={Users} />
+            <KpiCard label="Avg invoice" value={formatCurrency(avgInv)} sub="per transaction" delta={-1} icon={BarChart3} />
+          </>
         )}
-
-        <div className="card card-hover">
-          <div className="card-body">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Tasks Completed</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {stats?.taskStats?.completed || 0}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                {stats?.taskStats?.pending || 0} pending
-              </p>
-              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                Active
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {(role === 'admin' || role === 'manager') && (
-          <div className="card card-hover">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">Active Team</p>
-                  <p className="text-3xl font-bold text-purple-600">
-                    {stats?.employeeActivity?.length || 0}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Users className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-sm text-gray-500">
-                  members active
-                </p>
-                <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded-full">
-                  Online
-                </span>
-              </div>
-            </div>
-          </div>
+        {showManagerKpis && (
+          <>
+            <KpiCard label="Total revenue" value={formatCurrency(revenue)} sub="In range" delta={8} icon={DollarSign} />
+            <KpiCard label="Tasks completed" value={String(completed)} sub="Pipeline" delta={5} icon={CheckCircle} />
+          </>
         )}
-
-        {(role === 'admin' || role === 'manager') && (
-          <div className="card card-hover">
-            <div className="card-body">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">Avg Invoice</p>
-                  <p className="text-3xl font-bold text-orange-600">
-                    {formatCurrency(stats?.salesStats?.averageInvoice || 0)}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                  <BarChart3 className="h-6 w-6 text-orange-600" />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-sm text-gray-500">
-                  per transaction
-                </p>
-                <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                  Avg
-                </span>
-              </div>
-            </div>
-          </div>
+        {showSalesKpis && (
+          <>
+            <KpiCard label="Your tasks" value={String(completed)} sub="Completed in range" delta={3} icon={CheckCircle} />
+            <KpiCard
+              label="Uploads"
+              value={uploadCount != null ? String(uploadCount) : '—'}
+              sub="Total uploads visible to you"
+              delta={6}
+              icon={Upload}
+            />
+          </>
+        )}
+        {!showAdminKpis && !showManagerKpis && !showSalesKpis && (
+          <KpiCard label="Tasks completed" value={String(completed)} sub="All statuses" icon={CheckCircle} />
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Task Status Overview */}
-        <div className="card">
-          <div className="card-header">Task Status Overview</div>
-          <div className="card-body">
-            <div className="space-y-3">
-              {Object.entries(stats?.taskStats || {}).map(([status, count]) => (
-                <div key={status} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
-                      {status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  <span className="font-semibold">{count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Top Performers */}
-        {(role === 'admin' || role === 'manager') && (
-          <div className="card">
-            <div className="card-header">Top Performers</div>
-            <div className="card-body">
-              <div className="space-y-3">
-                {stats?.employeeActivity?.slice(0, 5).map((employee, index) => (
-                  <div key={employee._id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-medium">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="font-medium">{employee.name}</p>
-                        <p className="text-xs text-gray-500">{employee.code}</p>
-                      </div>
-                    </div>
-                    <span className="font-semibold text-green-600">
-                      {employee.completedTasks} tasks
-                    </span>
-                  </div>
-                ))}
-                {(!stats?.employeeActivity || stats.employeeActivity.length === 0) && (
-                  <p className="text-gray-500 text-center py-4">No activity data available</p>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Product Performance (Category Distribution) */}
-        {(role === 'admin' || role === 'manager') && (
-          <div className="card">
-            <div className="card-header">Category Distribution</div>
-            <div className="card-body">
-              {stats?.productPerformance && stats.productPerformance.length > 0 ? (
-                <div className="h-[300px] flex items-center justify-center">
-                  <Chart 
-                    options={{
-                      chart: { type: 'donut', fontFamily: 'Inter, sans-serif' },
-                      labels: stats.productPerformance.slice(0, 5).map(p => p._id),
-                      colors: ['#3b82f6', '#10b981', '#f59e0b', '#6366f1', '#ec4899'],
-                      plotOptions: {
-                        pie: {
-                          donut: {
-                            size: '70%',
-                            labels: {
-                              show: true,
-                              name: { show: true },
-                              value: { 
-                                show: true, 
-                                formatter: (val) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(Number(val)) 
-                              }
-                            }
-                          }
-                        }
-                      },
-                      dataLabels: { enabled: false },
-                      legend: { position: 'bottom' },
-                      tooltip: {
-                        y: { formatter: (val) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(Number(val)) }
-                      }
-                    }}
-                    series={stats.productPerformance.slice(0, 5).map(p => p.revenue)}
-                    type="donut"
-                    width="100%"
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {(showAdminKpis || showManagerKpis) && (
+          <div className="rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4 shadow-sm lg:col-span-1">
+            <h3 className="text-sm font-medium text-foreground">Revenue by category</h3>
+            {barSeries.vals.length > 0 ? (
+              <>
+                <div className="h-56">
+                  <Chart
+                    type="bar"
                     height="100%"
+                    width="100%"
+                    series={[{ name: 'Revenue', data: barSeries.vals }]}
+                    options={{
+                      chart: { type: 'bar', fontFamily: 'DM Sans, sans-serif', toolbar: { show: false } },
+                      plotOptions: { bar: { horizontal: true, barHeight: '70%', distributed: true, borderRadius: 4 } },
+                      colors: ['#639922', '#378ADD', '#BA7517', '#94a3b8', '#64748b', '#cbd5e1'],
+                      dataLabels: { enabled: false },
+                      xaxis: {
+                        categories: barSeries.cats,
+                        labels: {
+                          formatter: (v: string | number) =>
+                            new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 0 }).format(Number(v)),
+                        },
+                      },
+                      grid: { borderColor: 'var(--color-border-tertiary)', strokeDashArray: 4 },
+                    }}
                   />
                 </div>
-              ) : (
-                <p className="text-gray-500 text-center py-4">No product data available</p>
-              )}
-            </div>
+                <div className="mt-2 h-16">
+                  <Chart
+                    type="area"
+                    height="64"
+                    width="100%"
+                    series={[{ name: 'Trend', data: sparkSeries.length ? sparkSeries : [0] }]}
+                    options={{
+                      chart: { sparkline: { enabled: true }, fontFamily: 'DM Sans, sans-serif' },
+                      stroke: { curve: 'smooth', width: 2 },
+                      fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05 } },
+                      colors: ['#639922'],
+                      tooltip: { enabled: false },
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="py-8 text-center text-sm text-muted-foreground">No category revenue in this range.</p>
+            )}
           </div>
         )}
 
-        {/* Location Activity */}
-        <div className="card">
-          <div className="card-header">Location Activity</div>
-          <div className="card-body">
-            <div className="space-y-3">
-              {stats?.locationActivity?.slice(0, 5).map((location, idx) => {
-                let lat: number | undefined;
-                let lng: number | undefined;
-                const id = location._id as { lat?: number; lng?: number } | string | undefined;
-                if (id && typeof id === 'object') {
-                  lat = id.lat;
-                  lng = id.lng;
-                } else if (typeof id === 'string') {
-                  try {
-                    const p = JSON.parse(id) as { lat?: number; lng?: number };
-                    lat = p.lat;
-                    lng = p.lng;
-                  } catch {
-                    /* legacy non-JSON key */
-                  }
-                }
-                const latN = lat != null ? Number(lat) : NaN;
-                const lngN = lng != null ? Number(lng) : NaN;
-                const types = Array.isArray(location.types) ? location.types : [];
-                return (
-                  <div key={Number.isFinite(latN) && Number.isFinite(lngN) ? `${latN}-${lngN}` : `loc-${idx}`} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <MapPin className="h-4 w-4 text-gray-400" />
-                      <div>
-                        <p className="font-medium text-sm">
-                          {Number.isFinite(latN) && Number.isFinite(lngN) ? (
-                            <LocationText lat={latN} lng={lngN} />
-                          ) : (
-                            'Unknown location'
-                          )}
-                        </p>
-                        <p className="text-xs text-gray-500">{types.length ? types.join(', ') : '—'}</p>
-                      </div>
-                    </div>
-                    <span className="font-semibold text-blue-600">{location.count} uploads</span>
-                  </div>
-                );
-              })}
-              {(!stats?.locationActivity || stats.locationActivity.length === 0) && (
-                <p className="text-gray-500 text-center py-4">No location data available</p>
+        <div
+          className={cn(
+            'rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4 shadow-sm',
+            showAdminKpis || showManagerKpis ? 'lg:col-span-1' : 'lg:col-span-2'
+          )}
+        >
+          <h3 className="text-sm font-medium text-foreground">Tasks & activity</h3>
+          <div className="mt-3 space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Open tasks</p>
+            <ul className="space-y-2">
+              {openTasks.map((t) => (
+                <li
+                  key={t._id}
+                  className="flex items-center gap-2 rounded-lg border border-[var(--color-border-tertiary)] px-2 py-2 text-sm"
+                >
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--brand-green)]" />
+                  <span className="min-w-0 flex-1 truncate font-medium">{t.title}</span>
+                  <StatusBadge status={t.status as 'pending' | 'in_progress' | 'overdue'} />
+                </li>
+              ))}
+              {openTasks.length === 0 && (
+                <li className="text-sm text-muted-foreground">No open tasks in view.</li>
               )}
+            </ul>
+          </div>
+          {(role === 'admin' || role === 'manager') && (
+            <div className="mt-6 border-t border-[var(--color-border-tertiary)] pt-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Recent activity</p>
+              <ul className="mt-2 space-y-2">
+                {activities.slice(0, 5).map((a) => (
+                  <li key={a._id || a.timestamp} className="flex gap-2 text-sm">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--surface-2)] text-xs font-medium">
+                      {(a.user || '?').slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-foreground">{a.action}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {a.user} · {relTime(a.timestamp)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+                {activities.length === 0 && <li className="text-sm text-muted-foreground">No recent activity.</li>}
+              </ul>
             </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4 shadow-sm lg:col-span-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-medium text-foreground">Field map</h3>
+            <div className="ml-auto flex gap-1">
+              <button
+                type="button"
+                onClick={() => setMapFilterImg((v) => !v)}
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  mapFilterImg ? 'bg-[var(--brand-dark)] text-white' : 'bg-muted text-muted-foreground'
+                )}
+              >
+                Image
+              </button>
+              <button
+                type="button"
+                onClick={() => setMapFilterVid((v) => !v)}
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                  mapFilterVid ? 'bg-[var(--brand-dark)] text-white' : 'bg-muted text-muted-foreground'
+                )}
+              >
+                Video
+              </button>
+            </div>
+          </div>
+          <div className="h-64 overflow-hidden rounded-lg">
+            <MapContainer center={center} zoom={mapPoints.length ? 8 : 6} className="h-full w-full" scrollWheelZoom>
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
+              {mapPoints.map((p) => (
+                <CircleMarker
+                  key={`${p.lat}-${p.lng}-${p.idx}`}
+                  center={[p.lat, p.lng]}
+                  radius={8 + Math.min(p.count, 12)}
+                  pathOptions={{
+                    color: p.types.some((t) => /video/i.test(t)) ? '#378ADD' : '#639922',
+                    fillColor: p.types.some((t) => /video/i.test(t)) ? '#378ADD' : '#639922',
+                    fillOpacity: 0.35,
+                  }}
+                >
+                  <Popup>
+                    <div className="min-w-[180px] text-xs">
+                      <p className="font-medium">
+                        <LocationText lat={p.lat} lng={p.lng} />
+                      </p>
+                      <p className="text-muted-foreground">{p.count} uploads</p>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+          </div>
+          <div className="mt-2 flex gap-4 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[var(--brand-green)]" /> Image
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[var(--accent-blue)]" /> Video
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Daily Sales Trend - ApexCharts */}
-      {(role === 'admin') && (
-        <div className="card lg:col-span-2">
-          <div className="card-header">Revenue Trend (Last 7 Days)</div>
-          <div className="card-body">
-            {stats?.dailySales && stats.dailySales.length > 0 ? (
-              <div className="h-[350px]">
-                <Chart 
-                  options={{
-                    chart: {
-                      type: 'area',
-                      fontFamily: 'Inter, sans-serif',
-                      toolbar: { show: false },
-                      zoom: { enabled: false }
-                    },
-                    colors: ['#10b981'],
-                    fill: {
-                      type: 'gradient',
-                      gradient: {
-                        shadeIntensity: 1,
-                        opacityFrom: 0.4,
-                        opacityTo: 0.05,
-                        stops: [0, 90, 100]
-                      }
-                    },
-                    dataLabels: { enabled: false },
-                    stroke: { curve: 'smooth', width: 3 },
-                    xaxis: {
-                      categories: stats.dailySales.map(day => {
-                        const { year, month, day: d } = day._id;
-                        return year != null && month != null && d != null 
-                          ? new Date(year, month - 1, d).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })
-                          : 'Unknown';
-                      }),
-                      axisBorder: { show: false },
-                      axisTicks: { show: false }
-                    },
-                    yaxis: {
-                      labels: {
-                        formatter: (value) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', minimumFractionDigits: 0 }).format(value)
-                      }
-                    },
-                    grid: {
-                      borderColor: '#f3f4f6',
-                      strokeDashArray: 4,
-                      yaxis: { lines: { show: true } },
-                      xaxis: { lines: { show: false } }
-                    },
-                    tooltip: {
-                      theme: 'light',
-                      y: {
-                        formatter: (value) => new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(value)
-                      }
-                    }
-                  }}
-                  series={[{
-                    name: 'Revenue',
-                    data: stats.dailySales.map(day => day.revenue ?? 0)
-                  }]}
-                  type="area"
-                  width="100%"
-                  height="100%"
-                />
-              </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No sales data for the selected period</p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Recent Activity */}
-      {(role === 'admin' || role === 'manager') && (
-        <div className="card">
-          <div className="card-header">Recent Activity</div>
-          <div className="card-body">
-            <div className="space-y-3">
-              {activities.slice(0, 5).map((activity) => (
-                <div key={activity._id || activity.timestamp} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                    {activity.type === 'task' && <CheckCircle className="h-4 w-4 text-blue-600" />}
-                    {activity.type === 'invoice' && <DollarSign className="h-4 w-4 text-green-600" />}
-                    {activity.type === 'upload' && <Activity className="h-4 w-4 text-purple-600" />}
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium">{activity.action}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-500">{activity.user}</span>
-                      <span className="text-xs text-gray-400">•</span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(activity.timestamp).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {activities.length === 0 && (
-                <p className="text-gray-500 text-center py-8">No recent activity</p>
-              )}
-            </div>
+      {role === 'admin' && stats.dailySales && stats.dailySales.length > 0 && (
+        <div className="rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-4 shadow-sm">
+          <h3 className="text-sm font-medium">Revenue trend</h3>
+          <div className="h-72">
+            <Chart
+              type="area"
+              height="100%"
+              width="100%"
+              series={[{ name: 'Revenue', data: stats.dailySales.map((d) => d.revenue ?? 0) }]}
+              options={{
+                chart: { fontFamily: 'DM Sans, sans-serif', toolbar: { show: false } },
+                colors: ['#639922'],
+                stroke: { curve: 'smooth', width: 2 },
+                fill: {
+                  type: 'gradient',
+                  gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05 },
+                },
+                xaxis: {
+                  categories: stats.dailySales.map((day) => {
+                    const { year, month, day: dd } = day._id;
+                    return year != null && month != null && dd != null
+                      ? new Date(year, month - 1, dd).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                      : '';
+                  }),
+                },
+                yaxis: {
+                  labels: {
+                    formatter: (v: number) =>
+                      new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 0 }).format(v),
+                  },
+                },
+                grid: { borderColor: 'var(--color-border-tertiary)', strokeDashArray: 4 },
+              }}
+            />
           </div>
         </div>
       )}

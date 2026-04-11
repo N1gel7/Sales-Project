@@ -21,10 +21,10 @@ interface UploadItem {
 }
 
 const MEDIA_CONFIG: Record<string, { emoji: string; color: string; label: string }> = {
-  image: { emoji: '📷', color: '#3b82f6', label: 'Image' },
-  video: { emoji: '🎥', color: '#8b5cf6', label: 'Video' },
-  audio: { emoji: '🎙️', color: '#ef4444', label: 'Audio' },
-  other: { emoji: '📁', color: '#6b7280', label: 'File' },
+  image: { emoji: '📷', color: '#639922', label: 'Image' },
+  video: { emoji: '🎥', color: '#378ADD', label: 'Video' },
+  audio: { emoji: '🎙️', color: '#BA7517', label: 'Audio' },
+  other: { emoji: '📁', color: '#64748b', label: 'File' },
 };
 
 function getMediaCategory(type: string | null): string {
@@ -75,16 +75,16 @@ function buildPopupHtml(upload: UploadItem, locationLabel?: string | null): stri
     : '';
 
   return `
-    <div style="width:260px;font-family:system-ui,-apple-system,sans-serif;">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-        <span style="background:${cfg.color};color:white;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;">${cfg.emoji} ${cfg.label}</span>
-        <span style="font-size:11px;color:#94a3b8;">${date}</span>
+    <div style="width:260px;font-family:DM Sans,system-ui,sans-serif;border-radius:10px;overflow:hidden;">
+      <div style="background:#0d0f14;color:#f2f0ea;padding:10px 12px;margin:-12px -12px 10px -12px;">
+        <div style="font-size:11px;font-weight:600;opacity:0.85;">${cfg.emoji} ${cfg.label}</div>
+        <div style="font-size:10px;opacity:0.6;margin-top:4px;">${date}</div>
       </div>
       ${mediaHtml}
       ${noteHtml}
       ${transcriptionHtml}
       ${translationHtml}
-      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:6px;border-top:1px solid #e2e8f0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid #e8ecf1;">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:24px;height:24px;background:#dbeafe;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;">👤</div>
           <div>
@@ -321,12 +321,10 @@ export default function MapViewSimple(): React.ReactElement {
   // ── Render ───────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="card">
-          <div className="card-body text-center py-16">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200 border-t-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600 font-medium">Loading map…</p>
-          </div>
+      <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)]">
+        <div className="text-center">
+          <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-2 border-[var(--brand-green)] border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading map…</p>
         </div>
       </div>
     );
@@ -334,51 +332,42 @@ export default function MapViewSimple(): React.ReactElement {
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <div className="card">
-          <div className="card-body">
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-              <strong>Error:</strong> {error}
-            </div>
-          </div>
-        </div>
+      <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+        {error}
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="flex flex-col gap-0 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)]">
+      <div className="flex flex-col justify-between gap-3 border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] px-4 py-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">📍 Geospatial Map</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Visualise salesperson uploads across the field —{' '}
-            <span className="font-semibold text-blue-600">{visibleCount}</span> pinned of{' '}
+          <p className="text-sm text-muted-foreground">
+            <span className="font-semibold text-foreground">{visibleCount}</span> pins shown ·{' '}
             <span className="font-semibold">{geoUploads.length}</span> geolocated uploads
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
+            type="button"
             onClick={fetchUploads}
-            className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-xl hover:bg-gray-50 hover:shadow-sm text-sm font-medium transition-all flex items-center gap-2"
+            className="rounded-lg border border-[var(--color-border-tertiary)] bg-background px-3 py-1.5 text-sm font-medium hover:bg-[var(--surface-2)]"
           >
-            🔄 Refresh
+            Refresh
           </button>
           <button
+            type="button"
             onClick={locateUser}
-            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-4 py-2 rounded-xl hover:shadow-lg text-sm font-medium transition-all flex items-center gap-2"
+            className="rounded-lg bg-[var(--brand-dark)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
           >
-            📍 My Location
+            My location
           </button>
         </div>
       </div>
 
-      {/* Filter Controls */}
-      <div className="card">
-        <div className="card-body py-3 px-5">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Filters</span>
+      <div className="border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] px-4 py-3">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Filters</span>
 
             {/* Media type toggles */}
             {(['image', 'video'] as const).map((cat) => {
@@ -386,15 +375,15 @@ export default function MapViewSimple(): React.ReactElement {
               const checked = cat === 'image' ? filterImages : filterVideos;
               const setter = cat === 'image' ? setFilterImages : setFilterVideos;
               return (
-                <label key={cat} className="flex items-center gap-2 cursor-pointer select-none group">
+                <label key={cat} className="group flex cursor-pointer items-center gap-2 select-none">
                   <input
                     type="checkbox"
                     checked={checked}
                     onChange={(e) => setter(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 focus:ring-2 focus:ring-blue-500"
+                    className="h-4 w-4 rounded border-input"
                     style={{ accentColor: cfg.color }}
                   />
-                  <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors">
+                  <span className="text-sm text-foreground transition-colors group-hover:text-foreground">
                     {cfg.emoji} {cfg.label}s
                   </span>
                 </label>
@@ -402,54 +391,44 @@ export default function MapViewSimple(): React.ReactElement {
             })}
 
             {/* Separator */}
-            <div className="hidden sm:block w-px h-5 bg-gray-200"></div>
+            <div className="hidden h-5 w-px bg-[var(--color-border-tertiary)] sm:block" />
 
-            {/* User filter */}
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">👤</span>
+              <span className="text-sm text-muted-foreground">Rep</span>
               <select
                 value={filterUser}
                 onChange={(e) => setFilterUser(e.target.value)}
-                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="rounded-lg border border-[var(--color-border-tertiary)] bg-background px-3 py-1.5 text-sm focus:border-[var(--brand-green)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-green)]/30"
               >
-                <option value="all">All Salespeople</option>
+                <option value="all">All</option>
                 {uniqueUsers.map((code) => (
-                  <option key={code} value={code}>{code}</option>
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
-        </div>
       </div>
 
-      {/* Map */}
-      <div className="card overflow-hidden">
+      <div className="relative min-h-[420px] flex-1">
         <div
           ref={mapRef}
           id="upload-map-container"
-          style={{ height: '600px', width: '100%', minHeight: '600px', backgroundColor: '#f1f5f9' }}
-          className="rounded-2xl"
+          style={{ height: 'min(70vh, 640px)', width: '100%', minHeight: '420px', backgroundColor: 'var(--surface-2)' }}
+          className="rounded-br-xl rounded-bl-xl"
         />
-      </div>
-
-      {/* Legend */}
-      <div className="card">
-        <div className="card-body py-3 px-5">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Legend</span>
+        <div className="pointer-events-none absolute bottom-4 left-4 z-[500] rounded-lg border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-3 shadow-md">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Legend</p>
+          <div className="flex flex-col gap-2">
             {Object.entries(MEDIA_CONFIG)
-              .filter(([key]) => key !== 'audio')
+              .filter(([key]) => key !== 'audio' && key !== 'other')
               .map(([key, cfg]) => (
-              <div key={key} className="flex items-center gap-2">
-                <span
-                  className="inline-flex items-center justify-center w-6 h-6 rounded-full text-white text-xs"
-                  style={{ background: cfg.color }}
-                >
-                  {cfg.emoji}
-                </span>
-                <span className="text-sm text-gray-600">{cfg.label}</span>
-              </div>
-            ))}
+                <div key={key} className="flex items-center gap-2 text-sm">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: cfg.color }} />
+                  <span className="text-muted-foreground">{cfg.label}</span>
+                </div>
+              ))}
           </div>
         </div>
       </div>

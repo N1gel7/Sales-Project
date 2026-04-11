@@ -14,6 +14,7 @@ import {
   Clock,
   AlertCircle
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 type Invoice = {
   _id: string;
@@ -87,7 +88,7 @@ export default function Billing(): React.ReactElement {
 
   async function createInvoice() {
     if (!newInvoice.client || !newInvoice.product || !newInvoice.price) {
-      alert('Please fill in all required fields');
+      toast.error('Please fill in all required fields.');
       return;
     }
 
@@ -109,26 +110,25 @@ export default function Billing(): React.ReactElement {
         setNewInvoice({ client: '', product: '', price: '', notes: '' });
         setShowCreateForm(false);
         await loadInvoices();
-        alert('Invoice created successfully!');
+        toast.success('Invoice created.');
       } else {
         const error = await response.json();
-        alert('Error creating invoice: ' + error.error);
+        toast.error(typeof error.error === 'string' ? error.error : 'Could not create invoice.');
       }
     } catch (error) {
-      alert('Error creating invoice: ' + error);
+      toast.error(error instanceof Error ? error.message : 'Could not create invoice.');
     }
   }
 
   async function sendEmail(invoiceId: string) {
     if (!emailForm.to) {
-      alert('Please enter recipient email address');
+      toast.error('Please enter a recipient email address.');
       return;
     }
 
-    // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(emailForm.to)) {
-      alert('Please enter a valid email address');
+      toast.error('Please enter a valid email address.');
       return;
     }
 
@@ -150,17 +150,17 @@ export default function Billing(): React.ReactElement {
       const result = await response.json();
       
       if (result.success) {
-        alert(`✅ Invoice sent successfully to ${result.recipient}!`);
+        toast.success(`Invoice sent to ${result.recipient ?? emailForm.to}`);
         setEmailForm({ to: '', subject: '', message: '' });
         setShowEmailForm(false);
         setSelectedInvoice(null);
-        await loadInvoices(); // Refresh the invoices list
+        await loadInvoices();
       } else {
-        alert('❌ Error sending invoice: ' + result.message);
+        toast.error(typeof result.message === 'string' ? result.message : 'Could not send invoice.');
       }
     } catch (error) {
       console.error('Email error:', error);
-      alert('❌ Error sending invoice: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error(error instanceof Error ? error.message : 'Could not send invoice.');
     } finally {
       setSendingEmail(false);
     }
@@ -195,7 +195,7 @@ export default function Billing(): React.ReactElement {
     })
     .catch(error => {
       console.error('Error:', error);
-      alert('Error generating PDF. Please make sure you are logged in.');
+      toast.error('Could not download PDF. Check that you are signed in.');
     });
   }
 

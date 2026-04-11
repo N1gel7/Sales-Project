@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { NavLink, Route, Routes, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,13 +11,11 @@ import {
   MessageCircle,
   FileText as ReportIcon,
   Menu,
-  X,
   LogOut,
   User,
   Users as UsersIcon,
   Settings,
-  Search,
-  ChevronDown
+  ChevronDown,
 } from 'lucide-react';
 
 import Dashboard from './pages/Dashboard';
@@ -32,14 +30,33 @@ import Invoices from './pages/Invoices';
 import Chat from './pages/Chat';
 import Reports from './pages/Reports';
 import Users from './pages/Users.tsx';
-
-// Removed JWT decoding for simplified auth
+import { ShellProvider, useShell, type DateRangePreset } from './context/ShellContext';
+import { GlobalSearchTrigger } from './components/GlobalSearch';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 function useUser() {
   const userInfo = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
   if (!userInfo) return null;
   try {
-    return JSON.parse(userInfo);
+    return JSON.parse(userInfo) as {
+      name?: string;
+      email?: string;
+      role?: string;
+      code?: string;
+      id?: string;
+      _id?: string;
+    };
   } catch {
     return null;
   }
@@ -58,85 +75,275 @@ function RequireAuth({ children, roles }: { children: React.ReactElement; roles?
   return children;
 }
 
-function UserInfo() {
-  const user = useUser();
-  const [showDropdown, setShowDropdown] = useState(false);
-  if (!user) return null;
+const ROUTE_TITLES: Record<string, string> = {
+  '/': 'Dashboard',
+  '/products': 'Products',
+  '/categories': 'Categories',
+  '/tasks': 'Tasks',
+  '/uploads': 'Uploads',
+  '/billing': 'Billing',
+  '/invoices': 'Invoices',
+  '/chat': 'Chat',
+  '/reports': 'Reports',
+  '/users': 'Users',
+  '/map': 'Map',
+};
 
-  const roleColors = {
-    admin: 'bg-red-100 text-red-800 border-red-200',
-    manager: 'bg-blue-100 text-blue-800 border-blue-200',
-    sales: 'bg-green-100 text-green-800 border-green-200'
-  };
+function pageTitle(pathname: string): string {
+  if (ROUTE_TITLES[pathname]) return ROUTE_TITLES[pathname];
+  return 'SalesOps';
+}
 
+function initials(name?: string): string {
+  if (!name?.trim()) return '?';
+  const p = name.trim().split(/\s+/);
+  if (p.length === 1) return p[0].slice(0, 2).toUpperCase();
+  return (p[0][0] + p[p.length - 1][0]).toUpperCase();
+}
+
+function SidebarNav({
+  role,
+  onNavigate,
+  linkClass,
+}: {
+  role: string | null;
+  onNavigate?: () => void;
+  linkClass?: string;
+}): React.ReactElement {
   return (
-    <div className="relative">
-      <button
-        onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors"
-      >
-        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-          <User className="h-4 w-4 text-blue-600" />
-        </div>
-        <div className="hidden sm:block text-left">
-          <div className="text-sm font-medium text-gray-900">{user.name}</div>
-          <div className="text-xs text-gray-500">{user.code}</div>
-        </div>
-        <ChevronDown className="h-4 w-4 text-gray-400" />
-      </button>
-
-      {showDropdown && (
-        <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <User className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <div className="font-medium text-gray-900">{user.name}</div>
-                <div className="text-sm text-gray-500">{user.email}</div>
-                <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${roleColors[user.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}`}>
-                  {user.role?.toUpperCase()}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="py-1">
-            <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </button>
-          </div>
-        </div>
+    <nav className={cn('flex flex-1 flex-col gap-0.5 p-2', linkClass)}>
+      <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" onNavigate={onNavigate} />
+      {role === 'admin' && <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" onNavigate={onNavigate} />}
+      {(role === 'admin' || role === 'manager') && (
+        <>
+          <SideLink to="/products" icon={<Package size={20} />} label="Products" onNavigate={onNavigate} />
+          <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" onNavigate={onNavigate} />
+        </>
       )}
+      <SideLink to="/tasks" icon={<ClipboardList size={20} />} label="Tasks" onNavigate={onNavigate} />
+      <SideLink to="/uploads" icon={<Upload size={20} />} label="Uploads" onNavigate={onNavigate} />
+      {(role === 'admin' || role === 'sales') && (
+        <>
+          <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" onNavigate={onNavigate} />
+          <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" onNavigate={onNavigate} />
+        </>
+      )}
+      <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" onNavigate={onNavigate} />
+      <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" onNavigate={onNavigate} />
+      {(role === 'admin' || role === 'manager') && (
+        <SideLink to="/map" icon={<Map size={20} />} label="Map" onNavigate={onNavigate} />
+      )}
+    </nav>
+  );
+}
+
+function SideLink({
+  to,
+  icon,
+  label,
+  onNavigate,
+}: {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  onNavigate?: () => void;
+}): React.ReactElement {
+  return (
+    <NavLink
+      to={to}
+      onClick={() => onNavigate?.()}
+      className={({ isActive }) =>
+        cn(
+          'group relative flex items-center gap-3 rounded-lg py-2.5 pl-2.5 pr-2 text-sm font-medium transition-colors',
+          isActive
+            ? 'bg-[rgba(99,153,34,0.2)] text-white'
+            : 'text-white/70 hover:bg-white/5 hover:text-white'
+        )
+      }
+      end={to === '/'}
+    >
+      {({ isActive }) => (
+        <>
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
+            {icon}
+            {isActive && (
+              <span className="absolute -right-0.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[var(--brand-green)]" />
+            )}
+          </span>
+          <span className="min-w-0 flex-1 truncate opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+            {label}
+          </span>
+        </>
+      )}
+    </NavLink>
+  );
+}
+
+function DateRangePills(): React.ReactElement {
+  const { datePreset, setDatePreset } = useShell();
+  const presets: DateRangePreset[] = ['7d', '30d', '90d'];
+  return (
+    <div className="flex items-center gap-1 rounded-full border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] p-0.5">
+      {presets.map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => setDatePreset(p)}
+          className={cn(
+            'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+            datePreset === p
+              ? 'bg-[var(--brand-dark)] text-white'
+              : 'text-muted-foreground hover:bg-background'
+          )}
+        >
+          {p === '7d' ? '7d' : p === '30d' ? '30d' : '90d'}
+        </button>
+      ))}
     </div>
   );
 }
 
-function LogoutButton() {
+function UserMenu(): React.ReactElement {
+  const user = useUser();
   const navigate = useNavigate();
+  if (!user) return <></>;
+
   function logout() {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user_info');
     navigate('/login');
   }
+
   return (
-    <button
-      onClick={logout}
-      className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-    >
-      <LogOut className="h-4 w-4" />
-      <span className="hidden sm:inline">Logout</span>
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger className="inline-flex h-9 items-center gap-2 rounded-full border-0 bg-transparent px-2 outline-none hover:bg-muted">
+        <Avatar className="h-8 w-8 border border-border">
+          <AvatarFallback className="bg-[var(--brand-green-light)] text-xs font-medium text-[var(--brand-green-dark)]">
+            {initials(user.name)}
+          </AvatarFallback>
+        </Avatar>
+        <ChevronDown className="hidden h-4 w-4 opacity-50 sm:inline" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <div className="px-2 py-1.5">
+          <p className="text-sm font-medium">{user.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{user.role}</p>
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem disabled>
+          <Settings className="mr-2 h-4 w-4" />
+          Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={logout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          Log out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function AppShell(): React.ReactElement {
+  const role = useRole();
+  const location = useLocation();
+  const title = useMemo(() => pageTitle(location.pathname), [location.pathname]);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const user = useUser();
+
+  return (
+    <ShellProvider>
+      <div className="min-h-screen bg-[var(--surface-2)] text-foreground">
+        <div className="flex min-h-screen">
+          {/* Desktop sidebar */}
+          <aside className="group/sidebar fixed inset-y-0 left-0 z-40 hidden w-[56px] overflow-hidden border-r border-white/10 bg-[var(--brand-dark)] transition-[width] duration-200 ease-out hover:w-[220px] lg:block">
+            <div className="flex h-full flex-col">
+              <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-3 pt-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--brand-green)]" />
+                <span className="page-title min-w-0 truncate text-lg text-white opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+                  SalesOps
+                </span>
+              </div>
+              <SidebarNav role={role} />
+              <div className="mt-auto border-t border-white/10 p-3">
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-9 w-9 shrink-0 border border-white/20">
+                    <AvatarFallback className="bg-white/10 text-xs text-white">{initials(user?.name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+                    <p className="truncate text-xs font-medium text-white">{user?.name}</p>
+                    <p className="truncate text-[10px] uppercase text-white/50">{user?.role}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-[10px] text-white/30 opacity-0 group-hover/sidebar:opacity-100">v0.1.0</p>
+              </div>
+            </div>
+          </aside>
+
+          {/* Mobile sheet */}
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetContent side="left" className="w-[280px] border-[var(--brand-dark)] bg-[var(--brand-dark)] p-0 text-white">
+              <SheetHeader className="border-b border-white/10 p-4 text-left">
+                <SheetTitle className="page-title text-xl text-white">SalesOps</SheetTitle>
+              </SheetHeader>
+              <SidebarNav role={role} onNavigate={() => setMobileOpen(false)} linkClass="py-1" />
+            </SheetContent>
+          </Sheet>
+
+          <div className="flex min-h-screen flex-1 flex-col lg:pl-[56px]">
+            <header className="sticky top-0 z-30 border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] backdrop-blur-sm">
+              <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 lg:hidden"
+                    onClick={() => setMobileOpen(true)}
+                    aria-label="Open menu"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                  <h1 className="page-title min-w-0 truncate text-[20px] font-normal leading-tight">{title}</h1>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                  {location.pathname === '/' && <DateRangePills />}
+                  <Tooltip>
+                    <TooltipTrigger className="inline-flex">
+                      <GlobalSearchTrigger className="h-9 border-[var(--color-border-tertiary)] bg-background" />
+                    </TooltipTrigger>
+                    <TooltipContent>Search (⌘K)</TooltipContent>
+                  </Tooltip>
+                  <UserMenu />
+                </div>
+              </div>
+            </header>
+
+            <main className="flex-1 p-4 sm:p-6 lg:p-8">
+              <Routes>
+                <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
+                <Route path="/products" element={<RequireAuth roles={['admin', 'manager', 'sales']}><Products /></RequireAuth>} />
+                <Route path="/categories" element={<RequireAuth roles={['admin', 'manager', 'sales']}><Categories /></RequireAuth>} />
+                <Route path="/tasks" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Tasks /></RequireAuth>} />
+                <Route path="/uploads" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Uploads /></RequireAuth>} />
+                <Route path="/billing" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Billing /></RequireAuth>} />
+                <Route path="/invoices" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Invoices /></RequireAuth>} />
+                <Route path="/chat" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Chat /></RequireAuth>} />
+                <Route path="/reports" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Reports /></RequireAuth>} />
+                <Route path="/users" element={<RequireAuth roles={['admin']}><Users /></RequireAuth>} />
+                <Route path="/map" element={<RequireAuth roles={['admin', 'manager']}><MapViewSimple /></RequireAuth>} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </main>
+          </div>
+        </div>
+      </div>
+    </ShellProvider>
   );
 }
 
 function App(): React.ReactElement {
-  const role = useRole();
   const location = useLocation();
   const isAuthRoute = location.pathname === '/login';
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
 
   if (isAuthRoute) {
     return (
@@ -147,207 +354,7 @@ function App(): React.ReactElement {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 text-gray-900">
-      <div className="flex">
-        {/* Mobile Menu Overlay */}
-        {mobileMenuOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setMobileMenuOpen(false)} />
-            <div className="fixed inset-y-0 left-0 w-80 bg-white shadow-xl">
-              <div className="flex flex-col h-full">
-                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-                  <div>
-                    <div className="text-xl font-bold text-gray-900">Sales Manager</div>
-                    <div className="text-sm text-gray-500">Field ops & tracking</div>
-                  </div>
-                  <button
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="p-2 rounded-lg hover:bg-gray-100"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-                <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                  <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" />
-                  {role === 'admin' && (
-                    <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" />
-                  )}
-                  {(role === 'admin' || role === 'manager') && (
-                    <>
-                      <SideLink to="/products" icon={<Package size={20} />} label="Products" />
-                      <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" />
-                    </>
-                  )}
-                  <SideLink to="/tasks" icon={<ClipboardList size={20} />} label="Tasks" />
-                  <SideLink to="/uploads" icon={<Upload size={20} />} label="Uploads" />
-                  {(role === 'admin' || role === 'sales') && (
-                    <>
-                      <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" />
-                      <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" />
-                    </>
-                  )}
-                  <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" />
-                  <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" />
-                  {(role === 'admin' || role === 'manager') && (
-                    <SideLink to="/map" icon={<Map size={20} />} label="Map" />
-                  )}
-                </nav>
-                <div className="p-4 border-t border-gray-100">
-                  <div className="text-xs text-gray-500 mb-2">Version 0.1.0</div>
-                  <div className="flex items-center justify-between">
-                    <UserInfo />
-                    <LogoutButton />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Desktop Sidebar */}
-        <aside className="hidden lg:flex lg:w-72 xl:w-80 min-h-screen bg-white border-r border-gray-200 shadow-sm">
-          <div className="flex flex-col w-full">
-            <div className="px-6 py-6 border-b border-gray-100 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                  <LayoutDashboard className="h-6 w-6" />
-                </div>
-                <div>
-                  <div className="text-xl font-bold">Sales Manager</div>
-                  <div className="text-sm text-blue-100">Field ops & tracking</div>
-                </div>
-              </div>
-            </div>
-            <nav className="flex-1 p-4 space-y-2">
-              <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" />
-              {role === 'admin' && (
-                <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" />
-              )}
-              {(role === 'admin' || role === 'manager') && (
-                <>
-                  <SideLink to="/products" icon={<Package size={20} />} label="Products" />
-                  <SideLink to="/categories" icon={<ListTree size={20} />} label="Categories" />
-                </>
-              )}
-              <SideLink to="/tasks" icon={<ClipboardList size={20} />} label="Tasks" />
-              <SideLink to="/uploads" icon={<Upload size={20} />} label="Uploads" />
-              {(role === 'admin' || role === 'sales') && (
-                <>
-                  <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" />
-                  <SideLink to="/invoices" icon={<FileText size={20} />} label="Invoices" />
-                </>
-              )}
-              <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" />
-              <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" />
-              {(role === 'admin' || role === 'manager') && (
-                <SideLink to="/map" icon={<Map size={20} />} label="Map" />
-              )}
-            </nav>
-            <div className="p-4 border-t border-gray-100 bg-gray-50">
-
-              <div className="flex items-center justify-between">
-                <UserInfo />
-                <LogoutButton />
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        <div className="flex-1 min-w-0 flex flex-col">
-          {/* Header */}
-          <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-            <div className="px-4 sm:px-6 lg:px-8 py-4">
-              <div className="flex items-center justify-between">
-                {/* Mobile Menu Button */}
-                <button
-                  onClick={() => setMobileMenuOpen(true)}
-                  className="lg:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                >
-                  <Menu className="h-6 w-6" />
-                </button>
-
-                {/* Page Title */}
-                <div className="flex-1 lg:flex-none">
-                  <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
-                    Sales & Marketing Team Management
-                  </h1>
-                </div>
-
-                {/* Search and Actions */}
-                <div className="flex items-center gap-3">
-                  {/* Search */}
-                  <div className="hidden sm:block relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Search className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                      className="w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                      placeholder="Search products, people..."
-                    />
-                  </div>
-
-                  {/* User Menu */}
-                  <div className="hidden sm:flex items-center gap-3">
-                    <UserInfo />
-                    <LogoutButton />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {/* Main Content */}
-          <main className="flex-1 p-4 sm:p-6 lg:p-8">
-            <Routes>
-              <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-              <Route path="/products" element={<RequireAuth roles={["admin", "manager", "sales"]}><Products /></RequireAuth>} />
-              <Route path="/categories" element={<RequireAuth roles={["admin", "manager", "sales"]}><Categories /></RequireAuth>} />
-              <Route path="/tasks" element={<RequireAuth roles={["sales", "manager", "admin"]}><Tasks /></RequireAuth>} />
-              <Route path="/uploads" element={<RequireAuth roles={["sales", "manager", "admin"]}><Uploads /></RequireAuth>} />
-              <Route path="/billing" element={<RequireAuth roles={["sales", "manager", "admin"]}><Billing /></RequireAuth>} />
-              <Route path="/invoices" element={<RequireAuth roles={["sales", "manager", "admin"]}><Invoices /></RequireAuth>} />
-              <Route path="/chat" element={<RequireAuth roles={["sales", "manager", "admin"]}><Chat /></RequireAuth>} />
-              <Route path="/reports" element={<RequireAuth roles={["sales", "manager", "admin"]}><Reports /></RequireAuth>} />
-              <Route path="/users" element={<RequireAuth roles={["admin"]}><Users /></RequireAuth>} />
-              <Route path="/map" element={<RequireAuth roles={["admin", "manager"]}><MapViewSimple /></RequireAuth>} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SideLink({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }): React.ReactElement {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        `group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive
-          ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25'
-          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 hover:shadow-sm'
-        }`
-      }
-      end={to === '/'}
-    >
-      {({ isActive }) => (
-        <>
-          <span className={`transition-colors ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-gray-700'
-            }`}>
-            {icon}
-          </span>
-          <span className="truncate">{label}</span>
-          {isActive && (
-            <div className="ml-auto w-2 h-2 bg-white rounded-full"></div>
-          )}
-        </>
-      )}
-    </NavLink>
-  );
+  return <AppShell />;
 }
 
 export default App;
-
-
