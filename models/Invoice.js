@@ -5,6 +5,12 @@ const InvoiceSchema = new Schema({
   client: { type: String, required: true, trim: true },
   product: { type: String, required: true },
   price: { type: Number, required: true, min: 0 },
+  items: [{
+    productId: { type: String },
+    name: { type: String, required: true },
+    quantity: { type: Number, required: true, min: 1, default: 1 },
+    price: { type: Number, required: true, min: 0 }
+  }],
   location: { lat: Number, lng: Number },
   emailTo: { type: String, trim: true },
   emailSent: { type: Boolean, default: false },

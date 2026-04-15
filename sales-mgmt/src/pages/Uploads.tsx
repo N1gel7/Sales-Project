@@ -7,11 +7,17 @@ import { cn } from '@/lib/utils';
 type Location = { lat: number; lng: number } | null;
 
 export default function Uploads(): React.ReactElement {
+  const userInfo = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
+  const user = userInfo ? JSON.parse(userInfo) : null;
+  const isSales = user?.role === 'sales';
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+
   const [location, setLocation] = useState<Location>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   
   const [items, setItems] = useState<any[]>([]);
-  const [mediaFilter, setMediaFilter] = useState<'all' | 'image' | 'video' | 'audio'>('all');
+  const [mediaFilter, setMediaFilter] = useState<'all' | 'image' | 'video'>('all');
+  const [userFilter, setUserFilter] = useState('all');
   const [note, setNote] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -313,31 +319,45 @@ export default function Uploads(): React.ReactElement {
     }
   }
 
+  const uniqueUsers = useMemo(() => {
+    const map = new Map<string, string>();
+    items.forEach(u => {
+      if (u.user?.code) map.set(u.user.code, u.user.name || u.user.code);
+    });
+    return Array.from(map.entries()).map(([code, name]) => ({ code, name }));
+  }, [items]);
+
   const filteredItems = useMemo(() => {
     return items.filter((upload) => {
       const t = upload.type || '';
       const isImage = t.startsWith('image/') || t === 'image';
       const isVideo = t.startsWith('video/') || t === 'video';
-      const isAudio = t.startsWith('audio/') || t === 'audio';
-      if (mediaFilter === 'all') return true;
-      if (mediaFilter === 'image') return isImage;
-      if (mediaFilter === 'video') return isVideo;
-      if (mediaFilter === 'audio') return isAudio;
-      return true;
+
+      let fitsMedia = true;
+      if (mediaFilter === 'image') fitsMedia = isImage;
+      if (mediaFilter === 'video') fitsMedia = isVideo;
+
+      let fitsUser = true;
+      if (userFilter !== 'all') {
+        fitsUser = upload.user?.code === userFilter;
+      }
+      
+      return fitsMedia && fitsUser;
     });
-  }, [items, mediaFilter]);
+  }, [items, mediaFilter, userFilter]);
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-      <div className="w-full shrink-0 border-[var(--color-border-tertiary)] bg-[var(--surface)] lg:w-[360px] lg:border-r lg:pr-6">
-        <div className="card border-0 shadow-none lg:rounded-xl">
+      {isSales && (
+        <div className="w-full shrink-0 border-[var(--color-border-tertiary)] bg-[var(--surface)] lg:w-[360px] lg:border-r lg:pr-6">
+          <div className="card border-0 shadow-none lg:rounded-xl">
           <div className="card-header border-[var(--color-border-tertiary)] bg-transparent px-0 pt-0">Upload</div>
         <div className="card-body grid grid-cols-1 gap-4 px-0">
           <div className="space-y-2">
             <label className="text-sm font-medium">Select File</label>
             <input 
               type="file" 
-              accept="image/*,video/*,audio/*" 
+              accept="image/*,video/*" 
               onChange={handleFileSelect}
               className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
             />
@@ -351,10 +371,7 @@ export default function Uploads(): React.ReactElement {
                   <img src={URL.createObjectURL(selectedFile)} alt="Preview" className="mt-2 max-w-full h-32 object-cover rounded" />
                 )}
                 {selectedFile.type.startsWith('video/') && (
-                  <video src={URL.createObjectURL(selectedFile)} controls className="mt-2 max-w-full h-32 rounded" />
-                )}
-                {selectedFile.type.startsWith('audio/') && (
-                  <audio src={URL.createObjectURL(selectedFile)} controls className="mt-2 w-full" />
+                  <video src={URL.createObjectURL(selectedFile)} controls className="mt-2 max-h-[120px] w-full rounded-lg bg-black" />
                 )}
               </div>
             )}
@@ -444,24 +461,42 @@ export default function Uploads(): React.ReactElement {
             </div>
           </div>
         </div>
+        </div>
       </div>
-      </div>
+      )}
 
       <div className="min-w-0 flex-1 rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface-2)] p-4">
-        <div className="mb-4 flex flex-wrap gap-1">
-          {(['all', 'image', 'video', 'audio'] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setMediaFilter(f)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors',
-                mediaFilter === f ? 'bg-[var(--brand-dark)] text-white' : 'bg-[var(--surface)] text-muted-foreground shadow-sm'
-              )}
-            >
-              {f === 'all' ? 'All' : f}
-            </button>
-          ))}
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-1">
+            {(['all', 'image', 'video'] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setMediaFilter(f)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors',
+                  mediaFilter === f ? 'bg-[var(--brand-dark)] text-white' : 'bg-[var(--surface)] text-muted-foreground shadow-sm'
+                )}
+              >
+                {f === 'all' ? 'All' : f}
+              </button>
+            ))}
+          </div>
+          {isAdminOrManager && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-muted-foreground">Filter by Rep:</label>
+              <select
+                value={userFilter}
+                onChange={(e) => setUserFilter(e.target.value)}
+                className="h-8 max-w-[160px] rounded-md border border-[var(--color-border-tertiary)] bg-[var(--surface)] px-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-green)]"
+              >
+                <option value="all">All Reps</option>
+                {uniqueUsers.map(u => (
+                  <option key={u.code} value={u.code}>{u.name} ({u.code})</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
         <div className="[column-fill:_balance] [column-gap:12px] md:columns-2 xl:columns-3">
             {filteredItems.length === 0 ? (
@@ -478,7 +513,6 @@ export default function Uploads(): React.ReactElement {
                 const t = upload.type || '';
                 const isImage = t.startsWith('image/') || t === 'image';
                 const isVideo = t.startsWith('video/') || t === 'video';
-                const isAudio = t.startsWith('audio/') || t === 'audio';
                 const mediaSrc = upload.fileUrl || upload.mediaUrl;
                 return (
                   <div key={upload._id} className="mb-3 break-inside-avoid rounded-lg border border-[var(--color-border-tertiary)] bg-[var(--surface)] p-3 shadow-sm transition-shadow hover:shadow-md">
@@ -524,13 +558,7 @@ export default function Uploads(): React.ReactElement {
                           {isVideo && (
                             <video src={mediaSrc} controls className="max-h-56 w-full bg-black" />
                           )}
-                          {isAudio && (
-                            <div className="space-y-2 p-3">
-                              <div className="h-10 w-full rounded bg-[var(--surface)]" />
-                              <audio src={mediaSrc} controls className="w-full" />
-                            </div>
-                          )}
-                          {!isImage && !isVideo && !isAudio && (
+                          {!isImage && !isVideo && (
                             <div className="p-3">
                               <a href={mediaSrc} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-[var(--accent-blue)]">
                                 Open file

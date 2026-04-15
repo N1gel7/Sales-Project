@@ -199,6 +199,12 @@ const InvoiceSchema = new Schema({
   client: { type: String, required: true, trim: true },
   product: { type: String, required: true },
   price: { type: Number, required: true, min: 0 },
+  items: [{
+    productId: { type: String },
+    name: { type: String, required: true },
+    quantity: { type: Number, required: true, min: 1, default: 1 },
+    price: { type: Number, required: true, min: 0 }
+  }],
   location: { lat: Number, lng: Number },
   emailed: { type: Boolean, default: false }
 }, { timestamps: true });
@@ -219,10 +225,46 @@ Example:
 
 ---
 
+### PostgreSQL Schema (Supabase)
+
+For Supabase/PostgreSQL users, use the following SQL to create the `invoices` table with multi-product support.
+
+```sql
+create table public.invoices (
+  id uuid not null default gen_random_uuid (),
+  client character varying(255) not null,
+  product character varying(255) not null, -- Summary of items
+  price numeric(10, 2) not null default 0, -- Total price
+  items jsonb not null default '[]'::jsonb, -- Array of { productId, name, quantity, price }
+  status character varying(50) null default 'draft'::character varying,
+  location jsonb null,
+  emailed boolean null default false,
+  created_by uuid null,
+  created_at timestamp with time zone null default CURRENT_TIMESTAMP,
+  updated_at timestamp with time zone null default CURRENT_TIMESTAMP,
+  email_to character varying(255) null,
+  email_subject character varying(255) null,
+  email_message text null,
+  email_sent_at timestamp with time zone null,
+  constraint invoices_pkey primary key (id),
+  constraint invoices_created_by_fkey foreign KEY (created_by) references users (id) on delete set null
+) TABLESPACE pg_default;
+```
+
+**To update an existing table:**
+```sql
+ALTER TABLE public.invoices 
+ADD COLUMN items jsonb NOT NULL DEFAULT '[]'::jsonb;
+```
+
+---
+
+
 Notes
-- All models use `{ timestamps: true }` for `createdAt` and `updatedAt`.
+- All models use `{ timestamps: true }` (or triggers in Postgres) for `createdAt` and `updatedAt`.
 - For Vercel serverless, reuse a single cached Mongoose connection to avoid connection thrash.
 - Media files should be uploaded directly to Cloudinary/S3; store returned URLs here.
 - Add indexes based on your query patterns (e.g., `category`, `assignee`, `role`).
+
 
 

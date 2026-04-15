@@ -1,12 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   FileText,
   Plus,
   Search,
   Heart,
   MessageCircle,
-  Share2,
-  Download,
   Eye,
   Calendar,
   User,
@@ -121,11 +119,14 @@ const emptyReportForm = (): NewReportForm => ({
 });
 
 export default function ReportsPage() {
+  const userInfo = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
+  const user = userInfo ? JSON.parse(userInfo) : null;
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
+
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterStatus, setFilterStatus] = useState('published');
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [detailReport, setDetailReport] = useState<Report | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -150,7 +151,7 @@ export default function ReportsPage() {
     }
     
     loadReports();
-  }, [filterType, filterStatus]);
+  }, [activeFilter]);
 
   useEffect(() => {
     if (showCreateForm && availableUploads.length === 0 && !loadingUploads) {
@@ -161,8 +162,11 @@ export default function ReportsPage() {
   async function loadReports() {
     try {
       const params = new URLSearchParams();
-      if (filterType) params.append('type', filterType);
-      if (filterStatus) params.append('status', filterStatus);
+      if (['mood_board', 'summary_report', 'sales_report', 'client_feedback'].includes(activeFilter)) {
+        params.append('type', activeFilter);
+      } else if (['published', 'draft'].includes(activeFilter)) {
+        params.append('status', activeFilter);
+      }
       
       const response = await fetch(`/api/reports?${params}`, {
         headers: {
@@ -338,11 +342,31 @@ export default function ReportsPage() {
     });
   }
 
-  const filteredReports = reports.filter(report =>
-    report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    report.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const uniqueUsers = useMemo(() => {
+    const map = new Map<string, string>();
+    reports.forEach(r => {
+      if (r.author?.name) map.set(r.author.name, r.author.name);
+    });
+    return Array.from(map.entries()).map(([code, name]) => ({ code, name }));
+  }, [reports]);
+
+  const filteredReports = reports.filter((report) => {
+    if (!isAdminOrManager && currentUserId && report.author?.id !== currentUserId) return false;
+
+    let matchesFilter = true;
+    if (['mood_board', 'summary_report', 'sales_report', 'client_feedback'].includes(activeFilter)) {
+      matchesFilter = report.type === activeFilter;
+    } else if (['published', 'draft'].includes(activeFilter)) {
+      matchesFilter = report.status === activeFilter;
+    }
+
+    let matchesUser = true;
+    if (userFilter !== 'all') {
+      matchesUser = report.author?.name === userFilter;
+    }
+
+    return matchesFilter && matchesUser;
+  });
 
   if (loading) {
     return (
@@ -373,36 +397,25 @@ export default function ReportsPage() {
       </div>
 
       <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
-        <div className="relative min-w-0 flex-1 lg:max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search title, description, tags…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9"
-          />
-        </div>
         <div className="flex flex-wrap gap-1">
-          {(['', 'mood_board', 'summary_report', 'sales_report', 'client_feedback'] as const).map((val) => {
+          {(['all', 'published', 'draft', 'mood_board', 'summary_report', 'sales_report', 'client_feedback'] as const).map((val) => {
             const label =
-              val === ''
-                ? 'All types'
-                : val === 'mood_board'
-                  ? 'Mood board'
-                  : val === 'summary_report'
-                    ? 'Summary'
-                    : val === 'sales_report'
-                      ? 'Sales'
-                      : 'Feedback';
+              val === 'all' ? 'All reports' :
+              val === 'mood_board' ? 'Mood board' :
+              val === 'summary_report' ? 'Summary' :
+              val === 'sales_report' ? 'Sales' :
+              val === 'client_feedback' ? 'Feedback' :
+              val === 'published' ? 'Published' :
+              val === 'draft' ? 'Draft' : '';
+              
             return (
               <button
-                key={val || 'all'}
+                key={val}
                 type="button"
-                onClick={() => setFilterType(val)}
+                onClick={() => setActiveFilter(val)}
                 className={cn(
                   'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                  filterType === val
+                  activeFilter === val
                     ? 'bg-[var(--brand-dark)] text-white'
                     : 'bg-[var(--surface)] text-muted-foreground shadow-sm border border-[var(--color-border-tertiary)]'
                 )}
@@ -412,23 +425,21 @@ export default function ReportsPage() {
             );
           })}
         </div>
-        <div className="flex flex-wrap gap-1">
-          {(['published', 'draft', 'archived'] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setFilterStatus(s)}
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium capitalize',
-                filterStatus === s
-                  ? 'bg-[var(--brand-dark)] text-white'
-                  : 'bg-[var(--surface-2)] text-muted-foreground'
-              )}
+        {isAdminOrManager && (
+          <div className="flex items-center gap-2 lg:ml-auto">
+            <label className="text-xs font-medium text-muted-foreground whitespace-nowrap">Filter by Rep:</label>
+            <select
+              value={userFilter}
+              onChange={(e) => setUserFilter(e.target.value)}
+              className="h-8 max-w-[160px] rounded-md border border-[var(--color-border-tertiary)] bg-[var(--surface)] px-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-[var(--brand-green)]"
             >
-              {s}
-            </button>
-          ))}
-        </div>
+              <option value="all">All Reps</option>
+              {uniqueUsers.map((u: { code: string; name: string }) => (
+                <option key={u.code} value={u.code}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -566,29 +577,9 @@ export default function ReportsPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4 text-sm text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    <MessageCircle className="h-4 w-4" />
-                    {report.comments.length}
-                  </span>
-                  <span className="flex items-center gap-1">
                     <Heart className="h-4 w-4" />
                     {report.likes.length}
                   </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="p-1 text-muted-foreground hover:text-foreground"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    type="button"
-                    className="p-1 text-muted-foreground hover:text-foreground"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -601,7 +592,7 @@ export default function ReportsPage() {
           <FileText className="mx-auto mb-4 h-14 w-14 text-muted-foreground/35" />
           <h3 className="mb-2 text-lg font-medium text-foreground">No reports found</h3>
           <p className="mb-4 max-w-sm text-sm text-muted-foreground">
-            {searchTerm ? 'Try a different search or clear filters.' : 'Create your first report to get started.'}
+            Try clearing filters or create your first report to get started.
           </p>
           <Button
             type="button"
@@ -857,7 +848,7 @@ export default function ReportsPage() {
                 </div>
               )}
               <p className="text-sm text-muted-foreground">
-                {detailReport.comments.length} comments · {detailReport.likes.length} reactions
+                {detailReport.likes.length} reactions
               </p>
             </div>
           )}
