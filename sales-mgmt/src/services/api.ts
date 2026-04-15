@@ -7,18 +7,18 @@ export type LoginResponse = {
 };
 
 export const api = {
-  // auth
+  // auth (consolidated into /api/auth?action=...)
   async login(email: string, password: string) {
-    return http<LoginResponse>('/api/login', { method: 'POST', body: { email, password } });
+    return http<LoginResponse>('/api/auth?action=login', { method: 'POST', body: { email, password } });
   },
   async changeInitialPassword(email: string, currentPassword: string, newPassword: string) {
-    return http<LoginResponse>('/api/change-initial-password', {
+    return http<LoginResponse>('/api/auth?action=change-password', {
       method: 'POST',
       body: { email, currentPassword, newPassword }
     });
   },
   async forgotPassword(email: string) {
-    return http<{ message?: string }>('/api/forgot-password', { method: 'POST', body: { email } });
+    return http<{ message?: string }>('/api/auth?action=forgot-password', { method: 'POST', body: { email } });
   },
   async signup(name: string, email: string, password: string, role?: string, code?: string) {
     return http<LoginResponse>('/api/signup', { method: 'POST', body: { name, email, password, role, code } });
@@ -59,14 +59,14 @@ export const api = {
   addTaskComment(id: string, text: string) {
     return http(`/api/tasks/${id}/comments`, { method: 'POST', body: { text } });
   },
-  // notifications
+  // notifications (consolidated into /api/dashboard?view=notifications)
   listNotifications(params?: { unread?: boolean }) {
-    const usp = new URLSearchParams({ type: 'notifications', ...params } as any);
+    const usp = new URLSearchParams(params as any);
     const qs = usp.toString();
-    return http(`/api/general?${qs}`);
+    return http(`/api/dashboard?view=notifications${qs ? `&${qs}` : ''}`);
   },
   markNotificationRead(taskId: string, notificationId: string) {
-    return http(`/api/general?type=notifications`, { method: 'PATCH', body: { taskId, notificationId } });
+    return http(`/api/dashboard?view=notifications`, { method: 'PATCH', body: { taskId, notificationId } });
   },
   // invoices
   listInvoices() {
@@ -92,16 +92,16 @@ export const api = {
   listUsers() {
     return http('/api/users');
   },
-  // dashboard
+  // dashboard (consolidated into /api/dashboard?view=...)
   getDashboardStats(params?: { startDate?: string; endDate?: string; userId?: string }) {
     const usp = new URLSearchParams(params as any);
     const qs = usp.toString();
-    return http(`/api/dashboard/stats${qs ? `?${qs}` : ''}`);
+    return http(`/api/dashboard?view=stats${qs ? `&${qs}` : ''}`);
   },
   getDashboardActivity(params?: { limit?: number }) {
     const usp = new URLSearchParams(params as any);
     const qs = usp.toString();
-    return http(`/api/dashboard/activity${qs ? `?${qs}` : ''}`);
+    return http(`/api/dashboard?view=activity${qs ? `&${qs}` : ''}`);
   },
   // billing
   getInvoicePDF(id: string) {
@@ -141,31 +141,29 @@ export const api = {
     return http('/api/general?type=reports', { method: 'POST', body });
   },
   addReportAttachment(reportId: string, formData: FormData) {
-    return axiosInstance.post(`/api/reports/${reportId}/attachments`, formData);
+    return axiosInstance.post(`/api/general?type=report-attachment&reportId=${reportId}`, formData);
   },
   addReportComment(reportId: string, body: { content: string }) {
-    return http(`/api/reports/${reportId}/comments`, { method: 'POST', body });
+    return http(`/api/general?type=report-comment&reportId=${reportId}`, { method: 'POST', body });
   },
   likeReport(reportId: string) {
-    return http(`/api/reports/${reportId}/like`, { method: 'POST' });
+    return http(`/api/general?type=report-like&reportId=${reportId}`, { method: 'POST' });
   },
   // seed data
   seedData() {
     return http('/api/general?type=seed', { method: 'POST' });
   },
-  // session management
+  // session management (consolidated into /api/auth?action=sessions)
   getSessions() {
-    return http('/api/sessions');
+    return http('/api/auth?action=sessions');
   },
   revokeSession(token: string) {
-    return http(`/api/sessions/${token}`, { method: 'DELETE' });
+    return http(`/api/auth?action=sessions&token=${token}`, { method: 'DELETE' });
   },
   extendSession(hours?: number) {
-    return http('/api/sessions/extend', { method: 'POST', body: { hours } });
+    return http('/api/auth?action=sessions', { method: 'POST', body: { hours } });
   },
   logoutAll() {
     return http('/api/general?type=logout-all', { method: 'POST' });
   },
 };
-
-

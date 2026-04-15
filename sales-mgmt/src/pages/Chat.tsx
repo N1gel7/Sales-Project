@@ -226,7 +226,7 @@ export default function ChatPage() {
 
   async function pollTyping(chatId: string) {
     try {
-      const response = await fetch(`/api/typing?chatId=${chatId}`, { headers: getAuthHeaders() });
+      const response = await fetch(`/api/chats?action=typing&chatId=${chatId}`, { headers: getAuthHeaders() });
       if (!response.ok) return;
       const data: Typer[] = await response.json();
       setTypers(data);
@@ -238,7 +238,7 @@ export default function ChatPage() {
   // ── Typing state management ──────────────────────────────────
   function notifyTyping(isTyping: boolean) {
     if (!selectedChat) return;
-    fetch('/api/typing', {
+    fetch('/api/chats?action=typing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ chatId: selectedChat._id, isTyping }),

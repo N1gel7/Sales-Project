@@ -132,8 +132,8 @@ export default function Dashboard(): React.ReactElement {
 
       const headers = { Authorization: `Bearer ${token}` };
       const [statsRes, activityRes, tasksRes, uploadsRes] = await Promise.all([
-        fetch(`/api/dashboard/stats?${params}`, { headers, signal: controller.signal }),
-        fetch('/api/dashboard/activity?limit=5', { headers, signal: controller.signal }),
+        fetch(`/api/dashboard?view=stats&${params}`, { headers, signal: controller.signal }),
+        fetch('/api/dashboard?view=activity&limit=5', { headers, signal: controller.signal }),
         fetch('/api/tasks', { headers, signal: controller.signal }),
         fetch('/api/uploads', { headers, signal: controller.signal }).catch(() => null),
       ]);

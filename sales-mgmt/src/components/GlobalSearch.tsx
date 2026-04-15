@@ -45,7 +45,7 @@ export function GlobalSearchTrigger({ className }: { className?: string }): Reac
         fetch('/api/invoices', { headers })
           .then((r) => (r.ok ? r.json() : []))
           .catch(() => []),
-        fetch('/api/reports', { headers })
+        fetch('/api/general?type=reports', { headers })
           .then((r) => (r.ok ? r.json() : []))
           .catch(() => []),
       ]);

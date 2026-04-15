@@ -168,7 +168,7 @@ export default function ReportsPage() {
         params.append('status', activeFilter);
       }
       
-      const response = await fetch(`/api/reports?${params}`, {
+      const response = await fetch(`/api/general?type=reports&${params}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         }
@@ -200,7 +200,7 @@ export default function ReportsPage() {
     }
 
     try {
-      const response = await fetch('/api/reports', {
+      const response = await fetch('/api/general?type=reports', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -228,7 +228,7 @@ export default function ReportsPage() {
 
   async function toggleLike(reportId: string) {
     try {
-      const response = await fetch('/api/reports', {
+      const response = await fetch('/api/general?type=reports', {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
