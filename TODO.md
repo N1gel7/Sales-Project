@@ -96,4 +96,23 @@
 - **Details:** Lecturer grading heavily relies on visible Git history, but current Pull Requests (PRs) lack detailed descriptions.
 - **Steps:** Go to the "Closed" Pull Requests tab on GitHub. Edit past PR titles to reflect the actual feature built, and add 3-bullet-point descriptions explaining *what* was changed, *why* it was changed, and *where* the change happened. 
 
+---
 
+## Track F: System Design Documentation (All Group Members)
+*Lecturers expect visual representations of system architecture. Divide these diagrams among the team to include in the final report/presentation.*
+
+### F1. Database Entity-Relationship (ER) Diagram
+- **Details:** Visualize the Supabase schema and table relationships.
+- **Steps:** Map out the connections between `users`, `invoices`, `tasks`, `uploads`, and `activity_logs`. Clearly label the Primary Keys (PK) and Foreign Keys (e.g., `tasks.assignee_id -> users.id`).
+
+### F2. UML Class Diagram
+- **Details:** Show the object-oriented structure of the React frontend state and Data Models.
+- **Steps:** Map out the core React interface structures (e.g., `User`, `Invoice`, `Task`) and the `api.ts` service structure showing how the client interacts with the backend.
+
+### F3. Use Case Diagram
+- **Details:** Demonstrate user roles and permissions visually.
+- **Steps:** Draw 'Actors' (Admin, Manager, Sales Rep) and map lines to 'Use Cases' (e.g., "Admin creates a user", "Sales Rep uploads media", "Manager views analytics"). This is the easiest way to visually explain your Role-Based Access Control logic to the lecturer!
+
+### F4. Sequence Diagram (Login & JWT Flow)
+- **Details:** Explain the authentication lifecycle, which is usually the most complex architectural component of a web app.
+- **Steps:** Draw a step-by-step timeline tracing: 1) User submits credentials -> 2) Node API verifies via bcrypt -> 3) Node API generates JWT -> 4) React saves token and routes user -> 5) React automatically attaches the token to future `api.ts` requests.
