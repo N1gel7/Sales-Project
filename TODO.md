@@ -116,3 +116,4 @@
 ### F4. Sequence Diagram (Login & JWT Flow)
 - **Details:** Explain the authentication lifecycle, which is usually the most complex architectural component of a web app.
 - **Steps:** Draw a step-by-step timeline tracing: 1) User submits credentials -> 2) Node API verifies via bcrypt -> 3) Node API generates JWT -> 4) React saves token and routes user -> 5) React automatically attaches the token to future `api.ts` requests.
+
