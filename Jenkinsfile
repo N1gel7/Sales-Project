@@ -50,9 +50,6 @@ pipeline {
         }
 
         stage('Deploy to Vercel') {
-            when {
-                branch 'dev'
-            }
             steps {
                 sh '''
                     npm install -g vercel
