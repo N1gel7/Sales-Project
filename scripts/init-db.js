@@ -262,7 +262,6 @@ async function initDB() {
     console.log('   Without it, the endpoints fall back to JavaScript aggregation automatically.\n');
 
 
-
     // ─────────────────────────────────────────────
     // Seed Initial Categories
     // ─────────────────────────────────────────────

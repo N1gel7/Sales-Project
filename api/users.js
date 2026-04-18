@@ -1,6 +1,8 @@
 import { supabase } from './_lib/db.js';
-import { withAuth, withRole } from './_lib/authMiddleware.js';
+import { withRole } from './_lib/authMiddleware.js';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import { Resend } from 'resend';
 
 async function handler(req, res) {
   if (req.method === 'GET') {
@@ -29,15 +31,16 @@ async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to fetch users' });
     }
   } else if (req.method === 'POST') {
-    const { name, email, role, password } = req.body;
-    if (!name || !email || !role || !password) {
+    const { name, email, role } = req.body;
+    if (!name || !email || !role) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     
     try {
+      const generatedPassword = crypto.randomBytes(8).toString('hex');
       const code = name.replace(/\s/g, '').substring(0, 3).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
       const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(password, salt);
+      const passwordHash = await bcrypt.hash(generatedPassword, salt);
       
       const { data, error } = await supabase
         .from('users')
@@ -61,6 +64,22 @@ async function handler(req, res) {
           return res.status(409).json({ error: 'Email already exists' });
         }
         throw error;
+      }
+      
+      const resendApiKey = process.env.RESEND_API_KEY;
+      if (resendApiKey) {
+        const resend = new Resend(resendApiKey);
+        await resend.emails.send({
+          from: 'onboarding@resend.dev',
+          to: email,
+          subject: 'Welcome to SalesOps - Your Account',
+          html: `<p>Hello ${name},</p>
+                 <p>An administrator has created an account for you on SalesOps.</p>
+                 <p>Your temporary password is: <strong>${generatedPassword}</strong></p>
+                 <p>Upon your first login, you will be prompted to change this password securely.</p>
+                 <br>
+                 <p>Login at: <a href="http://localhost:5173/login">http://localhost:5173/login</a></p>`
+        }).catch(err => console.error("Resend error:", err));
       }
       
       const newUser = { 

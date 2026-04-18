@@ -40,8 +40,7 @@ const Users = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'sales',
-    password: ''
+    role: 'sales'
   });
 
   const fetchUsers = async () => {
@@ -72,7 +71,7 @@ const Users = () => {
       const res = await axiosInstance.post('/api/users', formData);
       setUsers([res.data, ...users]);
       setShowAddModal(false);
-      setFormData({ name: '', email: '', role: 'sales', password: '' });
+      setFormData({ name: '', email: '', role: 'sales' });
       toast.success(`User ${res.data?.name ?? ''} created`.trim());
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create user');
@@ -194,33 +193,22 @@ const Users = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">System Role</label>
-                    <select
-                      name="role"
-                      value={formData.role}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 focus:bg-white transition-all text-sm outline-none appearance-none"
-                    >
-                      <option value="sales">Sales Agent</option>
-                      <option value="manager">Manager</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Initial Password</label>
-                    <input
-                      type="password"
-                      name="password"
-                      required
-                      value={formData.password}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 focus:bg-white transition-all text-sm outline-none"
-                      placeholder="••••••••"
-                      minLength={6}
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">System Role</label>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 focus:bg-white transition-all text-sm outline-none appearance-none"
+                  >
+                    <option value="sales">Sales Agent</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                  <p className="mt-2 text-xs text-gray-500 flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4" />
+                    A secure initial password will be auto-generated and emailed to the user.
+                  </p>
                 </div>
               </div>
 

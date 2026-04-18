@@ -173,14 +173,17 @@ async function setupAnalyticsRPC() {
               COUNT(*)                               AS rep_count,
               ROW_NUMBER() OVER (
                 PARTITION BY
-                  EXTRACT(YEAR FROM i.created_at),
-                  EXTRACT(MONTH FROM i.created_at)
+                  EXTRACT(YEAR FROM i.created_at)::INT,
+                  EXTRACT(MONTH FROM i.created_at)::INT
                 ORDER BY COUNT(*) DESC
               )                                      AS rn
             FROM invoices i
             LEFT JOIN users u ON u.id = i.created_by
             WHERE i.created_at >= NOW() - (months_back || ' months')::INTERVAL
-            GROUP BY sale_year, sale_month, u.name
+            GROUP BY 
+              EXTRACT(YEAR FROM i.created_at)::INT,
+              EXTRACT(MONTH FROM i.created_at)::INT, 
+              u.name
           )
         SELECT
           m.sale_year,

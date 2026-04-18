@@ -1,5 +1,5 @@
 import { supabase } from './_lib/db.js';
-import { withAuth, withRole } from './_lib/authMiddleware.js';
+import { withRole } from './_lib/authMiddleware.js';
 import { logActivity } from './_lib/activityLogger.js';
 import { generateInvoicePdfBuffer } from './_lib/invoicePdf.js';
 import { sendInvoiceEmail } from './_lib/mailer.js';
