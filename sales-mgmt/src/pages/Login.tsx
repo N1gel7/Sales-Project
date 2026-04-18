@@ -66,8 +66,14 @@ export default function Login(): React.ReactElement {
       localStorage.setItem('auth_token', res.token);
       if (res.user) {
         localStorage.setItem('user_info', JSON.stringify(res.user));
+        let dest = '/';
+        if (res.user.role === 'admin') dest = '/users';
+        else if (res.user.role === 'manager') dest = '/billing';
+        else if (res.user.role === 'sales') dest = '/tasks';
+        navigate(dest);
+      } else {
+        navigate('/');
       }
-      navigate('/');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Authentication failed.');
     } finally {
@@ -95,7 +101,13 @@ export default function Login(): React.ReactElement {
       if (res.user) {
         localStorage.setItem('user_info', JSON.stringify(res.user));
       }
-      window.setTimeout(() => navigate('/'), 900);
+      window.setTimeout(() => {
+        let dest = '/';
+        if (res.user?.role === 'admin') dest = '/users';
+        else if (res.user?.role === 'manager') dest = '/billing';
+        else if (res.user?.role === 'sales') dest = '/tasks';
+        navigate(dest);
+      }, 900);
     } catch (e: unknown) {
       setPasswordChangeError(e instanceof Error ? e.message : 'Failed to change password.');
     } finally {
