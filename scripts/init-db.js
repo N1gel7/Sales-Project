@@ -261,31 +261,7 @@ async function initDB() {
     console.log('   get_task_completion_rates, get_product_performance) used by /api/analytics/*.');
     console.log('   Without it, the endpoints fall back to JavaScript aggregation automatically.\n');
 
-    // ─────────────────────────────────────────────
-    // Seed Initial Users
-    // ─────────────────────────────────────────────
-    const adminExists = await pool.query('SELECT 1 FROM users WHERE email = $1', ['admin@example.com']);
-    
-    if (adminExists.rows.length === 0) {
-      console.log('Seeding initial mock users...');
-      
-      const adminPass = await bcrypt.hash('Admin#123', 10);
-      const managerPass = await bcrypt.hash('Manager#123', 10);
-      const repPass = await bcrypt.hash('Rep#123', 10);
 
-      const insertText = `
-        INSERT INTO users (name, email, password_hash, role, code) 
-        VALUES ($1, $2, $3, $4, $5)
-      `;
-
-      await pool.query(insertText, ['Admin User', 'admin@example.com', adminPass, 'admin', 'ADM001']);
-      await pool.query(insertText, ['Manager User', 'manager@example.com', managerPass, 'manager', 'MGR001']);
-      await pool.query(insertText, ['Sales Rep', 'rep1@example.com', repPass, 'sales', 'SAL001']);
-      
-      console.log('✅ Initial mock users created.');
-    } else {
-      console.log('⚠️ Users already exist. Skipping seed.');
-    }
 
     // ─────────────────────────────────────────────
     // Seed Initial Categories

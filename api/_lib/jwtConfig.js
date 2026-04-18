@@ -12,5 +12,8 @@ function normalizeEnvString(value) {
 }
 
 const rawSecret = normalizeEnvString(process.env.JWT_SECRET);
-export const JWT_SECRET = rawSecret || 'fallback-secret-key-for-dev';
+if (!rawSecret) {
+  throw new Error("FATAL: JWT_SECRET environment variable is missing.");
+}
+export const JWT_SECRET = rawSecret;
 export const JWT_EXPIRES_IN = normalizeEnvString(process.env.JWT_EXPIRES_IN) || '24h';

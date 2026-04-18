@@ -67,51 +67,6 @@ async function handler(req, res) {
       return res.json([]);
     }
 
-    // ── Chat Messages ──
-    if (type === 'chat-messages' && chatId) {
-      if (method === 'GET') {
-        const { data: messages, error: mErr } = await supabase.from('messages').select('*').eq('chat_id', chatId).order('created_at', { ascending: true });
-        if (mErr) throw mErr;
-        const { data: users } = await supabase.from('users').select('id, name, role');
-        const userMap = {};
-        (users||[]).forEach(u => userMap[u.id] = u);
-
-        const formatted = messages.map(m => ({
-          _id: m.id, content: m.content, type: m.type, readBy: m.read_by, createdAt: m.created_at,
-          sender: m.sender_id ? { id: m.sender_id, name: userMap[m.sender_id]?.name, role: userMap[m.sender_id]?.role } : null
-        }));
-        return res.json(formatted);
-      }
-      if (method === 'POST') {
-        let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        const { content, type: mtype } = body || {};
-        
-        const { data: m, error } = await supabase.from('messages').insert([{
-          chat_id: chatId, sender_id: req.user?.id, content: content || '', type: mtype || 'text'
-        }]).select('*').single();
-        if (error) throw error;
-        
-        const senderInfo = { id: req.user?.id, name: req.user?.name, role: req.user?.role };
-        await supabase.from('chats').update({
-          last_message: { content, sender: senderInfo, sentAt: m.created_at },
-          updated_at: new Date().toISOString()
-        }).eq('id', chatId);
-
-        return res.status(201).json({
-           _id: m.id, content: m.content, type: m.type, readBy: m.read_by, createdAt: m.created_at, sender: senderInfo
-        });
-      }
-      if (method === 'PUT') {
-        const { data: currentMessageRows } = await supabase.from('messages').select('id, read_by').eq('chat_id', chatId);
-        for (let m of currentMessageRows || []) {
-           let reads = m.read_by || [];
-           reads.push({ user: req.user?.id, readAt: new Date().toISOString() });
-           await supabase.from('messages').update({ read_by: reads }).eq('id', m.id);
-        }
-        return res.json({ message: 'Messages marked as read' });
-      }
-      return res.json([]);
-    }
 
     // ── Reports ──
     if (type === 'reports') {
