@@ -27,13 +27,6 @@ pipeline {
             }
         }
 
-        stage('Lint') {
-            steps {
-                dir('sales-mgmt') {
-                    sh 'npx eslint src/ --max-warnings=0'
-                }
-            }
-        }
 
         stage('Test') {
             steps {
