@@ -277,8 +277,10 @@
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "frontend": "cd sales-mgmt && npm run dev",
     "backend": "node server.js",
+    "security:scan-secrets": "node scripts/check-secrets.js",
     "db:init": "node scripts/init-db.js",
     "db:analytics": "node scripts/setup-analytics-rpc.js",
+    "db:add-password-flag": "node scripts/add-initial-password-flag.js",
     "db:migrate": "npm run db:init && npm run db:analytics"
   },
   "repository": {

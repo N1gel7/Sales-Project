@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { getLocationLabel } from '../utils/locationLabel';
+import { api } from '../services/api';
 
 declare global {
   interface Window {
@@ -118,13 +119,8 @@ export default function MapViewSimple(): React.ReactElement {
   // ── Fetch uploads ────────────────────────────────────────────
   const fetchUploads = useCallback(async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) return;
-      const res = await fetch('/api/uploads', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
+      if (!localStorage.getItem('auth_token')) return;
+      const data = await api.listUploads();
       setUploads(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch uploads for map:', err);

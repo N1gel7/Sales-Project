@@ -11,6 +11,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
+import { api } from '@/services/api';
 
 type SearchRow = { id: string; label: string; sub?: string; type: string; path: string };
 
@@ -31,23 +32,25 @@ export function GlobalSearchTrigger({ className }: { className?: string }): Reac
   const [rows, setRows] = React.useState<SearchRow[]>([]);
 
   const load = React.useCallback(async () => {
-    const token = localStorage.getItem('auth_token');
-    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    const userInfo = localStorage.getItem('user_info');
+    let role: string | undefined;
+    if (userInfo) {
+      try {
+        role = (JSON.parse(userInfo) as { role?: string }).role;
+      } catch {
+        role = undefined;
+      }
+    }
+    const canViewBilling = role === 'admin' || role === 'manager';
     const next: SearchRow[] = [];
     try {
       const [tasks, users, invoices, reports] = await Promise.all([
-        fetch('/api/tasks', { headers })
-          .then((r) => (r.ok ? r.json() : []))
-          .catch(() => []),
-        fetch('/api/users', { headers })
-          .then((r) => (r.ok ? r.json() : []))
-          .catch(() => []),
-        fetch('/api/invoices', { headers })
-          .then((r) => (r.ok ? r.json() : []))
-          .catch(() => []),
-        fetch('/api/general?type=reports', { headers })
-          .then((r) => (r.ok ? r.json() : []))
-          .catch(() => []),
+        api.listTasks().catch(() => []),
+        api.listUsers().catch(() => []),
+        canViewBilling
+          ? api.listInvoices().catch(() => [])
+          : Promise.resolve([]),
+        api.listReports().catch(() => []),
       ]);
       (Array.isArray(tasks) ? tasks : []).forEach((t: { _id: string; title?: string }) =>
         next.push({
@@ -73,7 +76,7 @@ export function GlobalSearchTrigger({ className }: { className?: string }): Reac
             label: inv.client ? `Invoice — ${inv.client}` : `Invoice ${inv._id.slice(-6)}`,
             sub: inv.product,
             type: 'Invoice',
-            path: '/invoices',
+            path: '/billing',
           })
       );
       (Array.isArray(reports) ? reports : []).forEach((r: { _id: string; title?: string }) =>

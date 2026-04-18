@@ -6,6 +6,12 @@ export type LoginResponse = {
   user?: { id: string; name: string; email: string; role?: string; code?: string };
 };
 
+export type InvoiceEmailResponse = {
+  success?: boolean;
+  recipient?: string;
+  message?: string;
+};
+
 export const api = {
   // auth (consolidated into /api/auth?action=...)
   async login(email: string, password: string) {
@@ -75,6 +81,9 @@ export const api = {
   createInvoice(body: any) {
     return http('/api/invoices', { method: 'POST', body });
   },
+  markInvoiceAsPaid(id: string) {
+    return http(`/api/invoices/${id}/pay`, { method: 'POST' });
+  },
   // categories
   listCategories() {
     return http('/api/categories');
@@ -108,7 +117,7 @@ export const api = {
     return axiosInstance.get(`/api/invoices/${id}/pdf`, { responseType: 'blob' });
   },
   sendInvoiceEmail(id: string, body: { to: string; subject?: string; message?: string }) {
-    return http(`/api/invoices/${id}/email`, { method: 'POST', body });
+    return http<InvoiceEmailResponse>(`/api/invoices/${id}/email`, { method: 'POST', body });
   },
   // uploads
   listUploads() {
@@ -152,18 +161,5 @@ export const api = {
   // seed data
   seedData() {
     return http('/api/general?type=seed', { method: 'POST' });
-  },
-  // session management (consolidated into /api/auth?action=sessions)
-  getSessions() {
-    return http('/api/auth?action=sessions');
-  },
-  revokeSession(token: string) {
-    return http(`/api/auth?action=sessions&token=${token}`, { method: 'DELETE' });
-  },
-  extendSession(hours?: number) {
-    return http('/api/auth?action=sessions', { method: 'POST', body: { hours } });
-  },
-  logoutAll() {
-    return http('/api/general?type=logout-all', { method: 'POST' });
   },
 };

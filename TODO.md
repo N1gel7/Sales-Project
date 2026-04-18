@@ -117,4 +117,29 @@
 - **Details:** Explain the authentication lifecycle, which is usually the most complex architectural component of a web app.
 - **Steps:** Draw a step-by-step timeline tracing: 1) User submits credentials -> 2) Node API verifies via bcrypt -> 3) Node API generates JWT -> 4) React saves token and routes user -> 5) React automatically attaches the token to future `api.ts` requests.
 
+---
+
+## Track G: Release Readiness & Production Hardening (All Group Members)
+*These tasks ensure the project is safe, consistent, and presentation-ready for deployment and grading.*
+
+### G1. Rotate and Revoke Exposed Secrets
+- **Details:** If any API keys, DB passwords, SMTP credentials, or service tokens were committed at any point, they must be treated as compromised.
+- **Steps:** Rotate all exposed credentials in Supabase, Cloudinary, Resend/SMTP, and any other provider. Replace them in local environment files only, and verify old credentials are revoked.
+
+### G2. Enforce Environment Variable Hygiene
+- **Details:** Production secrets must never be stored in tracked files.
+- **Steps:** Ensure `.env` and any secret-bearing files are ignored by Git, keep only safe templates like `.env.example`, and verify required keys are documented without real values.
+
+### G3. Complete Frontend API Client Consolidation
+- **Details:** Only fixing `Billing.tsx` still leaves split-brain networking patterns in other pages.
+- **Steps:** Refactor remaining pages that use raw `fetch` (`Dashboard`, `Tasks`, `Reports`, `Chat`, etc.) to use `sales-mgmt/src/services/api.ts` and shared HTTP helpers for consistent auth/error handling.
+
+### G4. Tighten CI Quality Gates
+- **Details:** Current CI allows lint/test stages to pass even when checks fail, which can hide regressions before demos or release.
+- **Steps:** After baseline tests are stable, update Jenkins pipeline rules so lint and test failures fail the build (remove pass-through patterns like `|| true` and placeholder test bypasses).
+
+### G5. Align README and API Contract Documentation
+- **Details:** Documentation currently has drift against the live route structure and auth flow.
+- **Steps:** Update `README.md` (and related docs) so endpoint examples, auth routes, architecture notes, and setup steps match the current serverless API design and frontend integration.
+
 

@@ -15,6 +15,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { api, type InvoiceEmailResponse } from '../services/api';
 
 type InvoiceItem = {
   productId?: string;
@@ -78,13 +79,9 @@ export default function Billing(): React.ReactElement {
   async function loadInvoices() {
     setLoading(true);
     try {
-      const response = await fetch('/api/invoices', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-      });
-      const data = await response.json();
-      console.log('[loadInvoices] status:', response.status, 'count:', Array.isArray(data) ? data.length : 'NOT_ARRAY', data);
+      const data = await api.listInvoices();
       if (Array.isArray(data)) {
-        setInvoices(data);
+        setInvoices(data as Invoice[]);
       }
     } catch (error) {
       console.error('Failed to load invoices:', error);
@@ -95,12 +92,9 @@ export default function Billing(): React.ReactElement {
 
   async function loadProducts() {
     try {
-      const response = await fetch('/api/products', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(data);
+      const data = await api.listProducts();
+      if (Array.isArray(data)) {
+        setProducts(data as { _id?: string, id?: string, name: string, price: number, category?: any }[]);
       }
     } catch (error) {
       console.error('Failed to load products:', error);
@@ -127,29 +121,16 @@ export default function Billing(): React.ReactElement {
     }
 
     try {
-      const response = await fetch('/api/invoices', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({
-          client: newInvoice.client,
-          items: newInvoice.items,
-          notes: newInvoice.notes,
-          coords: location
-        })
+      await api.createInvoice({
+        client: newInvoice.client,
+        items: newInvoice.items,
+        notes: newInvoice.notes,
+        coords: location
       });
-
-      if (response.ok) {
-        setNewInvoice({ client: '', items: [], notes: '' });
-        setShowCreateForm(false);
-        await loadInvoices();
-        toast.success('Invoice created.');
-      } else {
-        const error = await response.json();
-        toast.error(typeof error.error === 'string' ? error.error : 'Could not create invoice.');
-      }
+      setNewInvoice({ client: '', items: [], notes: '' });
+      setShowCreateForm(false);
+      await loadInvoices();
+      toast.success('Invoice created.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not create invoice.');
     }
@@ -175,29 +156,12 @@ export default function Billing(): React.ReactElement {
   }
 
   async function markAsPaid(invoiceId: string) {
-    // Optimistically update local state immediately
-    setInvoices(prev => prev.map(inv =>
-      inv._id === invoiceId ? { ...inv, status: 'paid' as const } : inv
-    ));
-
     try {
-      const response = await fetch(`/api/invoices/${invoiceId}/pay`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-
-      const body = await response.text();
-      console.log('[markAsPaid] Response:', response.status, body);
-
-      if (response.ok) {
-        toast.success('Invoice marked as paid.');
-      } else {
-        await loadInvoices();
-        toast.error('Failed to mark invoice as paid.');
-      }
+      await api.markInvoiceAsPaid(invoiceId);
+      setInvoices(prev => prev.map(inv =>
+        inv._id === invoiceId ? { ...inv, status: 'paid' as const } : inv
+      ));
+      toast.success('Invoice marked as paid.');
     } catch (error) {
       console.error('[markAsPaid] Error:', error);
       await loadInvoices();
@@ -219,20 +183,11 @@ export default function Billing(): React.ReactElement {
 
     setSendingEmail(true);
     try {
-      const response = await fetch(`/api/invoices/${invoiceId}/email`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({
-          to: emailForm.to,
-          subject: emailForm.subject || `Invoice #${invoiceId.slice(-8)} - Your Purchase`,
-          message: emailForm.message
-        })
+      const result: InvoiceEmailResponse = await api.sendInvoiceEmail(invoiceId, {
+        to: emailForm.to,
+        subject: emailForm.subject || `Invoice #${invoiceId.slice(-8)} - Your Purchase`,
+        message: emailForm.message
       });
-
-      const result = await response.json();
       
       if (result.success) {
         toast.success(`Invoice sent to ${result.recipient ?? emailForm.to}`);
@@ -253,22 +208,9 @@ export default function Billing(): React.ReactElement {
 
 
   function openPDF(invoiceId: string) {
-    const token = localStorage.getItem('auth_token');
-    
-    // Fetch PDF with authentication
-    fetch(`/api/invoices/${invoiceId}/pdf`, {
-      headers: { 
-        'Authorization': `Bearer ${token}` 
-      }
-    })
+    api.getInvoicePDF(invoiceId)
     .then(response => {
-      if (response.ok) {
-        return response.blob();
-      }
-      throw new Error('Failed to generate PDF');
-    })
-    .then(blob => {
-      // Create download link
+      const blob = response.data;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

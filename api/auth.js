@@ -7,6 +7,16 @@ import { JWT_SECRET, JWT_EXPIRES_IN } from './_lib/jwtConfig.js';
 import { withAuth } from './_lib/authMiddleware.js';
 import { Resend } from 'resend';
 
+function requiresInitialPasswordChange(user) {
+  // Preferred explicit flag.
+  if (typeof user?.has_changed_initial_password === 'boolean') {
+    return user.has_changed_initial_password === false;
+  }
+
+  // Backward compatibility for older rows that used reset_password_expires = 0 as a sentinel.
+  return user?.reset_password_expires === 0 || user?.reset_password_expires === '0';
+}
+
 // ── Login ──
 async function handleLogin(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -32,7 +42,7 @@ async function handleLogin(req, res) {
   const isValidPassword = await bcrypt.compare(password, user.password_hash);
   if (!isValidPassword) return res.status(401).json({ error: 'Incorrect email or password' });
 
-  if (Number(user.reset_password_expires) === 0) {
+  if (requiresInitialPasswordChange(user)) {
     return res.status(200).json({
       requiresPasswordChange: true,
       message: 'Password change required before first login',
@@ -73,7 +83,7 @@ async function handleChangePassword(req, res) {
   const { data: user, error } = await supabase.from('users').select('*').eq('email', email).single();
   if (error || !user) return res.status(401).json({ error: 'Invalid credentials' });
   if (!user.active) return res.status(403).json({ error: 'Account is inactive or disabled' });
-  if (Number(user.reset_password_expires) !== 0) {
+  if (!requiresInitialPasswordChange(user)) {
     return res.status(400).json({ error: 'Initial password change is not required for this account' });
   }
 
@@ -84,7 +94,13 @@ async function handleChangePassword(req, res) {
   const passwordHash = await bcrypt.hash(newPassword, salt);
 
   const { error: updateError } = await supabase.from('users')
-    .update({ password_hash: passwordHash, reset_password_token: null, reset_password_expires: null, updated_at: new Date().toISOString() })
+    .update({
+      password_hash: passwordHash,
+      reset_password_token: null,
+      reset_password_expires: null,
+      has_changed_initial_password: true,
+      updated_at: new Date().toISOString()
+    })
     .eq('id', user.id);
   if (updateError) throw updateError;
 
@@ -159,31 +175,16 @@ async function handleResetPassword(req, res) {
   const hashedPassword = await bcrypt.hash(newPassword, salt);
 
   const { error: updateError } = await supabase.from('users')
-    .update({ password_hash: hashedPassword, reset_password_token: null, reset_password_expires: null })
+    .update({
+      password_hash: hashedPassword,
+      reset_password_token: null,
+      reset_password_expires: null,
+      has_changed_initial_password: true
+    })
     .eq('id', user.id);
   if (updateError) throw updateError;
 
   return res.status(200).json({ message: "Password updated successfully" });
-}
-
-// ── Sessions ──
-async function handleSessions(req, res) {
-  const { method } = req;
-
-  if (method === 'GET') {
-    return res.json([{
-      id: 'current',
-      token: req.headers.authorization?.split(' ')[1]?.substring(0, 8) + '...',
-      createdAt: new Date().toISOString(),
-      lastAccessed: new Date().toISOString(),
-      expiresAt: req.user?.exp ? new Date(req.user.exp * 1000).toISOString() : null,
-      userAgent: req.headers['user-agent'] || 'unknown'
-    }]);
-  }
-  if (method === 'POST') return res.json({ message: 'Session info retrieved (JWT-based, stateless)' });
-  if (method === 'DELETE') return res.json({ message: 'Logged out (token should be removed client-side)' });
-
-  return res.status(405).end();
 }
 
 // ── Router ──
@@ -197,9 +198,8 @@ async function handler(req, res) {
       case 'forgot-password': return await handleForgotPassword(req, res);
       case 'reset-password':  return await handleResetPassword(req, res);
       case 'me':              return await handleMe(req, res);
-      case 'sessions':        return await handleSessions(req, res);
       default:
-        return res.status(400).json({ error: 'Unknown auth action. Use ?action=login|me|change-password|forgot-password|reset-password|sessions' });
+        return res.status(400).json({ error: 'Unknown auth action. Use ?action=login|me|change-password|forgot-password|reset-password' });
     }
   } catch (error) {
     console.error('Auth error:', error);
@@ -207,7 +207,7 @@ async function handler(req, res) {
   }
 }
 
-// Login and forgot/reset don't require auth; me, sessions, change-password do.
+// Login and forgot/reset don't require auth; me and change-password do.
 // We handle auth selectively: wrap the handler but skip auth for public actions.
 export default async function(req, res) {
   const action = req.query?.action || '';
@@ -216,7 +216,7 @@ export default async function(req, res) {
   if (publicActions.includes(action)) {
     // For empty action, return a helpful error without requiring auth
     if (!action) {
-      return res.status(400).json({ error: 'Missing ?action= parameter. Use login|me|change-password|forgot-password|reset-password|sessions' });
+      return res.status(400).json({ error: 'Missing ?action= parameter. Use login|me|change-password|forgot-password|reset-password' });
     }
     return handler(req, res);
   }

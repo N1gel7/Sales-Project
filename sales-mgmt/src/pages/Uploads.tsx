@@ -38,25 +38,11 @@ export default function Uploads(): React.ReactElement {
 
   async function load() {
     try {
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
+      if (!localStorage.getItem('auth_token')) {
         setItems([]);
         return;
       }
-      const res = await fetch('/api/uploads', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        if (res.status === 401) {
-          localStorage.removeItem('auth_token');
-          window.location.href = '/login';
-          return;
-        }
-        console.error('Uploads API error:', data);
-        setItems([]);
-        return;
-      }
+      const data = await api.listUploads();
       setItems(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load uploads:', error);

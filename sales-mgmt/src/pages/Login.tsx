@@ -2,13 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { Mail, Lock, LogIn, Eye, EyeOff, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
-
-const DEMO = {
-  admin: { email: 'admin@example.com', password: 'Admin#123' },
-  manager: { email: 'manager@example.com', password: 'Manager#123' },
-  sales: { email: 'rep1@example.com', password: 'Rep#123' },
-};
 
 export default function Login(): React.ReactElement {
   const [email, setEmail] = useState('');
@@ -27,7 +20,6 @@ export default function Login(): React.ReactElement {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotDone, setForgotDone] = useState(false);
   const [forgotErr, setForgotErr] = useState<string | null>(null);
-  const [roleHint, setRoleHint] = useState<'admin' | 'manager' | 'sales' | null>(null);
 
   const navigate = useNavigate();
 
@@ -174,27 +166,6 @@ export default function Login(): React.ReactElement {
           <div className="mb-8 lg:hidden">
             <h1 className="page-title text-3xl text-[var(--brand-dark)]">SalesOps</h1>
             <p className="text-sm text-muted-foreground">Sign in to continue</p>
-          </div>
-
-          <div className="mb-6 flex flex-wrap gap-2">
-            {(['admin', 'manager', 'sales'] as const).map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => {
-                  setRoleHint(r);
-                  setEmail(DEMO[r].email);
-                }}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors',
-                  roleHint === r
-                    ? 'border-[var(--brand-green)] bg-[var(--brand-green-light)] text-[var(--brand-green-dark)]'
-                    : 'border-border bg-background text-muted-foreground hover:border-[var(--brand-green)]/40'
-                )}
-              >
-                {r}
-              </button>
-            ))}
           </div>
 
           {forgotMode ? (
