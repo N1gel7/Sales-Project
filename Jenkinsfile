@@ -30,14 +30,22 @@ pipeline {
         stage('Lint') {
             steps {
                 dir('sales-mgmt') {
-                    sh 'npx eslint src/ --max-warnings=0 || true'
+                    sh 'npx eslint src/ --max-warnings=0'
                 }
             }
         }
 
         stage('Test') {
             steps {
-                sh 'npm test || echo "No tests configured yet"'
+                dir('sales-mgmt') {
+                    sh 'npm test'
+                }
+            }
+        }
+
+        stage('Security Scan') {
+            steps {
+                sh 'npm run security:scan-secrets'
             }
         }
 

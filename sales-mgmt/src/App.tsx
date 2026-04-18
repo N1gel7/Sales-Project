@@ -26,7 +26,6 @@ import Billing from './pages/Billing';
 import MapViewSimple from './pages/MapViewSimple';
 import Login from './pages/Login';
 import Categories from './pages/Categories';
-import Invoices from './pages/Invoices';
 import Chat from './pages/Chat';
 import Reports from './pages/Reports';
 import Users from './pages/Users.tsx';
@@ -44,6 +43,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { UserRole } from './constants/roles';
 
 function useUser() {
   const userInfo = typeof window !== 'undefined' ? localStorage.getItem('user_info') : null;
@@ -67,10 +67,15 @@ function useRole(): string | null {
   return user?.role ?? null;
 }
 
-function RequireAuth({ children, roles }: { children: React.ReactElement; roles?: string[] }) {
+function isUserRole(role: string): role is UserRole {
+  return role === UserRole.ADMIN || role === UserRole.MANAGER || role === UserRole.SALES;
+}
+
+function RequireAuth({ children, roles }: { children: React.ReactElement; roles?: UserRole[] }) {
   const role = useRole();
   const location = useLocation();
   if (!role) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (!isUserRole(role)) return <Navigate to="/" replace />;
   if (roles && !roles.includes(role)) return <Navigate to="/" replace />;
   return children;
 }
@@ -82,7 +87,6 @@ const ROUTE_TITLES: Record<string, string> = {
   '/tasks': 'Tasks',
   '/uploads': 'Uploads',
   '/billing': 'Billing',
-  '/invoices': 'Invoices',
   '/chat': 'Chat',
   '/reports': 'Reports',
   '/users': 'Users',
@@ -113,7 +117,7 @@ function SidebarNav({
   return (
     <nav className={cn('flex flex-1 flex-col gap-0.5 p-2', linkClass)}>
       <SideLink to="/" icon={<LayoutDashboard size={20} />} label="Dashboard" onNavigate={onNavigate} />
-      {role === 'admin' && (
+      {role === UserRole.ADMIN && (
         <>
           <SideLink to="/users" icon={<UsersIcon size={20} />} label="Users" onNavigate={onNavigate} />
           <SideLink to="/products" icon={<Package size={20} />} label="Products" onNavigate={onNavigate} />
@@ -122,12 +126,12 @@ function SidebarNav({
       )}
       <SideLink to="/tasks" icon={<ClipboardList size={20} />} label="Tasks" onNavigate={onNavigate} />
       <SideLink to="/uploads" icon={<Upload size={20} />} label="Uploads" onNavigate={onNavigate} />
-      {(role === 'admin' || role === 'sales') && (
+      {(role === UserRole.ADMIN || role === UserRole.MANAGER) && (
         <SideLink to="/billing" icon={<FileText size={20} />} label="Billing" onNavigate={onNavigate} />
       )}
       <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" onNavigate={onNavigate} />
       <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" onNavigate={onNavigate} />
-      {(role === 'admin' || role === 'manager') && (
+      {(role === UserRole.ADMIN || role === UserRole.MANAGER) && (
         <SideLink to="/map" icon={<Map size={20} />} label="Map" onNavigate={onNavigate} />
       )}
     </nav>
@@ -318,16 +322,15 @@ function AppShell(): React.ReactElement {
             <main className="flex-1 p-4 sm:p-6 lg:p-8">
               <Routes>
                 <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-                <Route path="/products" element={<RequireAuth roles={['admin']}><Products /></RequireAuth>} />
-                <Route path="/categories" element={<RequireAuth roles={['admin']}><Categories /></RequireAuth>} />
-                <Route path="/tasks" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Tasks /></RequireAuth>} />
-                <Route path="/uploads" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Uploads /></RequireAuth>} />
-                <Route path="/billing" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Billing /></RequireAuth>} />
-                <Route path="/invoices" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Invoices /></RequireAuth>} />
-                <Route path="/chat" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Chat /></RequireAuth>} />
-                <Route path="/reports" element={<RequireAuth roles={['sales', 'manager', 'admin']}><Reports /></RequireAuth>} />
-                <Route path="/users" element={<RequireAuth roles={['admin']}><Users /></RequireAuth>} />
-                <Route path="/map" element={<RequireAuth roles={['admin', 'manager']}><MapViewSimple /></RequireAuth>} />
+                <Route path="/products" element={<RequireAuth roles={[UserRole.ADMIN]}><Products /></RequireAuth>} />
+                <Route path="/categories" element={<RequireAuth roles={[UserRole.ADMIN]}><Categories /></RequireAuth>} />
+                <Route path="/tasks" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Tasks /></RequireAuth>} />
+                <Route path="/uploads" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Uploads /></RequireAuth>} />
+                <Route path="/billing" element={<RequireAuth roles={[UserRole.MANAGER, UserRole.ADMIN]}><Billing /></RequireAuth>} />
+                <Route path="/chat" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Chat /></RequireAuth>} />
+                <Route path="/reports" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Reports /></RequireAuth>} />
+                <Route path="/users" element={<RequireAuth roles={[UserRole.ADMIN]}><Users /></RequireAuth>} />
+                <Route path="/map" element={<RequireAuth roles={[UserRole.ADMIN, UserRole.MANAGER]}><MapViewSimple /></RequireAuth>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

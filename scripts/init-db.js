@@ -30,6 +30,7 @@ async function initDB() {
         code character varying(50) null,
         avatar_url text null,
         active boolean null default true,
+        has_changed_initial_password boolean not null default false,
         reset_password_token character varying(255) null,
         reset_password_expires bigint null,
         created_at timestamp with time zone null default CURRENT_TIMESTAMP,
@@ -39,6 +40,7 @@ async function initDB() {
         constraint users_email_key unique (email)
       ) TABLESPACE pg_default;
     `);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_changed_initial_password BOOLEAN NOT NULL DEFAULT FALSE`);
 
     // ─────────────────────────────────────────────
     // 2. Categories

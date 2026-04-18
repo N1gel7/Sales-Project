@@ -67,38 +67,6 @@ async function handler(req, res) {
       return res.json([]);
     }
 
-    // ── Chats ──
-    if (type === 'chats') {
-      if (method === 'GET') {
-        const { data: chats, error: cErr } = await supabase.from('chats').select('*').order('updated_at', { ascending: false });
-        if (cErr) throw cErr;
-        const { data: users } = await supabase.from('users').select('id, name, role');
-        const userMap = {};
-        (users||[]).forEach(u => userMap[u.id] = u);
-
-        const formatted = chats.map(c => ({
-          _id: c.id, name: c.name, type: c.type, participants: c.participants, isActive: c.is_active,
-          lastMessage: c.last_message, createdAt: c.created_at,
-          createdBy: c.created_by ? { _id: c.created_by, name: userMap[c.created_by]?.name, role: userMap[c.created_by]?.role } : null
-        }));
-        return res.json(formatted);
-      }
-      if (method === 'POST') {
-        let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        const { name, type: ctype, participants } = body || {};
-        
-        const { data: c, error } = await supabase.from('chats').insert([{
-          name: name || 'New Chat', type: ctype || 'group', created_by: req.user?.id, participants: participants || []
-        }]).select('*').single();
-        if (error) throw error;
-        
-        return res.status(201).json({
-          _id: c.id, name: c.name, type: c.type, participants: c.participants, isActive: c.is_active, createdAt: c.created_at
-        });
-      }
-      return res.json([]);
-    }
-
     // ── Chat Messages ──
     if (type === 'chat-messages' && chatId) {
       if (method === 'GET') {
@@ -182,11 +150,6 @@ async function handler(req, res) {
         });
       }
       return res.json([]);
-    }
-
-    // ── Logout All ──
-    if (type === 'logout-all') {
-      return res.json({ message: 'Logged out (JWT-based, remove token client-side)' });
     }
 
     // ── Seed (dev only) ──
