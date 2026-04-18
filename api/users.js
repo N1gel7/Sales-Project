@@ -1,5 +1,5 @@
 import { supabase } from './_lib/db.js';
-import { withAuth } from './_lib/authMiddleware.js';
+import { withRole } from './_lib/authMiddleware.js';
 import bcrypt from 'bcryptjs';
 
 async function handler(req, res) {
@@ -84,4 +84,4 @@ async function handler(req, res) {
   return res.status(405).end();
 }
 
-export default withAuth(handler);
+export default withRole('admin', 'manager')(handler);
