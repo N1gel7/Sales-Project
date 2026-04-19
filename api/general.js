@@ -1,6 +1,18 @@
 import { supabase } from './_lib/db.js';
 import { withAuth } from './_lib/authMiddleware.js';
 
+function safeParseJson(value, fallback) {
+  if (value == null) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value;
+}
+
 /**
  * General purpose router — the frontend calls this with ?type= to reach
  * different resources. This delegates to Supabase JS queries.
@@ -71,16 +83,27 @@ async function handler(req, res) {
     // ── Reports ──
     if (type === 'reports') {
       if (method === 'GET') {
-        const { data: reports, error: rErr } = await supabase.from('reports').select('*').order('created_at', { ascending: false });
+        const reportType = req.query?.reportType || req.query?.typeFilter || null;
+        const status = req.query?.status || null;
+
+        let reportsQuery = supabase.from('reports').select('*').order('created_at', { ascending: false });
+        if (reportType && reportType !== 'all') reportsQuery = reportsQuery.eq('type', reportType);
+        if (status && status !== 'all') reportsQuery = reportsQuery.eq('status', status);
+
+        const { data: reports, error: rErr } = await reportsQuery;
         if (rErr) throw rErr;
         const { data: users } = await supabase.from('users').select('id, name, role');
         const userMap = {};
         (users||[]).forEach(u => userMap[u.id] = u);
 
-        const formatted = reports.map(r => ({
+        const formatted = (reports || []).map(r => ({
           _id: r.id, title: r.title, description: r.description, type: r.type,
-          attachments: typeof r.attachments === 'string' ? JSON.parse(r.attachments) : r.attachments,
-          tags: r.tags, status: r.status, visibility: r.visibility, comments: r.comments, likes: r.likes,
+          attachments: safeParseJson(r.attachments, []),
+          tags: safeParseJson(r.tags, []),
+          status: r.status,
+          visibility: r.visibility,
+          comments: safeParseJson(r.comments, []),
+          likes: safeParseJson(r.likes, []),
           createdAt: r.created_at, updatedAt: r.updated_at,
           author: r.author_id ? { id: r.author_id, name: userMap[r.author_id]?.name, role: userMap[r.author_id]?.role } : null
         }));

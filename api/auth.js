@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { JWT_SECRET, JWT_EXPIRES_IN } from './_lib/jwtConfig.js';
 import { withAuth } from './_lib/authMiddleware.js';
-import { Resend } from 'resend';
+import { sendPasswordResetEmail } from './_lib/mailer.js';
 
 function requiresInitialPasswordChange(user) {
   // Preferred explicit flag.
@@ -136,13 +136,10 @@ async function handleForgotPassword(req, res) {
     .eq('email', email);
   if (updateError) throw updateError;
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
+  const appUrl = (process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
 
-  await resend.emails.send({
-    from: 'onboarding@resend.dev', to: email, subject: 'Lumi - Password Reset',
-    html: `<p>You requested a password reset. Click the link below to reset it:</p><br><a href="${resetLink}">Reset Password</a><br><p>This link expires in 1 hour.</p>`
-  });
+  await sendPasswordResetEmail({ to: email, resetLink });
 
   return res.status(200).json({ message: "If that email exists, a reset link has been sent." });
 }

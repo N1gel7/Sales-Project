@@ -204,7 +204,6 @@
     "range-parser": "^1.2.1",
     "raw-body": "^2.5.2",
     "require-directory": "^2.1.1",
-    "resend": "^6.10.0",
     "restructure": "^3.0.2",
     "rxjs": "^7.8.2",
     "safe-buffer": "^5.2.1",

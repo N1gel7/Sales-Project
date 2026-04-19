@@ -2,7 +2,7 @@ import { supabase } from './_lib/db.js';
 import { withRole } from './_lib/authMiddleware.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import { Resend } from 'resend';
+import { sendUserWelcomeEmail } from './_lib/mailer.js';
 
 async function handler(req, res) {
   if (req.method === 'GET') {
@@ -66,20 +66,18 @@ async function handler(req, res) {
         throw error;
       }
       
-      const resendApiKey = process.env.RESEND_API_KEY;
-      if (resendApiKey) {
-        const resend = new Resend(resendApiKey);
-        await resend.emails.send({
-          from: 'onboarding@resend.dev',
+      const configuredAppUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+      const loginUrl = `${configuredAppUrl.replace(/\/$/, '')}/login`;
+      try {
+        await sendUserWelcomeEmail({
           to: email,
-          subject: 'Welcome to SalesOps - Your Account',
-          html: `<p>Hello ${name},</p>
-                 <p>An administrator has created an account for you on SalesOps.</p>
-                 <p>Your temporary password is: <strong>${generatedPassword}</strong></p>
-                 <p>Upon your first login, you will be prompted to change this password securely.</p>
-                 <br>
-                 <p>Login at: <a href="http://localhost:5173/login">http://localhost:5173/login</a></p>`
-        }).catch(err => console.error("Resend error:", err));
+          name,
+          generatedPassword,
+          loginUrl,
+        });
+      } catch (mailError) {
+        // User creation should still succeed even if email provider is unavailable.
+        console.error('Failed to send welcome email:', mailError);
       }
       
       const newUser = { 
