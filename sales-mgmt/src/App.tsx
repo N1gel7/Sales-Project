@@ -131,7 +131,7 @@ function SidebarNav({
       )}
       <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" onNavigate={onNavigate} />
       <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" onNavigate={onNavigate} />
-      {(role === UserRole.ADMIN || role === UserRole.MANAGER) && (
+      {(role === UserRole.ADMIN || role === UserRole.MANAGER || role === UserRole.SALES) && (
         <SideLink to="/map" icon={<Map size={20} />} label="Map" onNavigate={onNavigate} />
       )}
     </nav>
@@ -330,7 +330,7 @@ function AppShell(): React.ReactElement {
                 <Route path="/chat" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Chat /></RequireAuth>} />
                 <Route path="/reports" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Reports /></RequireAuth>} />
                 <Route path="/users" element={<RequireAuth roles={[UserRole.ADMIN]}><Users /></RequireAuth>} />
-                <Route path="/map" element={<RequireAuth roles={[UserRole.ADMIN, UserRole.MANAGER]}><MapViewSimple /></RequireAuth>} />
+                <Route path="/map" element={<RequireAuth roles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.SALES]}><MapViewSimple /></RequireAuth>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </main>

@@ -163,7 +163,7 @@ export default function ReportsPage() {
     try {
       const params = new URLSearchParams();
       if (['mood_board', 'summary_report', 'sales_report', 'client_feedback'].includes(activeFilter)) {
-        params.append('type', activeFilter);
+        params.append('reportType', activeFilter);
       } else if (['published', 'draft'].includes(activeFilter)) {
         params.append('status', activeFilter);
       }
