@@ -310,7 +310,7 @@ function AppShell(): React.ReactElement {
                   <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                     {location.pathname === '/' && <DateRangePills />}
                     <Tooltip>
-                      <TooltipTrigger asChild>
+                      <TooltipTrigger>
                         <GlobalSearchTrigger className="h-9 border-[var(--color-border-tertiary)] bg-background" />
                       </TooltipTrigger>
                       <TooltipContent>Search (⌘K)</TooltipContent>
