@@ -203,7 +203,6 @@ const Users = () => {
                   >
                     <option value="sales">Sales Agent</option>
                     <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
                   </select>
                   <p className="mt-2 text-xs text-gray-500 flex items-center gap-1.5">
                     <ShieldCheck className="h-4 w-4" />

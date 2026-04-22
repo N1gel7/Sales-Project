@@ -115,6 +115,24 @@ export default function MapViewSimple(): React.ReactElement {
   const [filterVideos, setFilterVideos] = useState(true);
   const [filterUser, setFilterUser] = useState('all');
   const [locationLabels, setLocationLabels] = useState<Record<string, string | null>>({});
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [currentUserCode, setCurrentUserCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    const raw = localStorage.getItem('user_info');
+    if (raw) {
+      try {
+        const u = JSON.parse(raw);
+        setUserRole(u.role);
+        setCurrentUserCode(u.code);
+        if (u.role === 'sales') {
+          setFilterUser(u.code);
+        }
+      } catch (err) {
+        console.error('Failed to parse user info:', err);
+      }
+    }
+  }, []);
 
   // ── Fetch uploads ────────────────────────────────────────────
   const fetchUploads = useCallback(async () => {
@@ -199,6 +217,12 @@ export default function MapViewSimple(): React.ReactElement {
       const cat = getMediaCategory(u.type);
       if (cat === 'image' && !filterImages) return false;
       if (cat === 'video' && !filterVideos) return false;
+      
+      // Restrict Sales Reps to only their own data
+      if (userRole === 'sales' && currentUserCode) {
+        return userCode === currentUserCode;
+      }
+
       if (filterUser !== 'all' && userCode !== filterUser) return false;
       return true;
     });
@@ -244,7 +268,7 @@ export default function MapViewSimple(): React.ReactElement {
     if (bounds.length > 0) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
     }
-  }, [uploads, filterImages, filterVideos, filterUser, locationLabels]);
+  }, [uploads, filterImages, filterVideos, filterUser, locationLabels, userRole, currentUserCode]);
 
   useEffect(() => {
     const candidates = uploads.filter((u) => u.coords?.lat != null && u.coords?.lng != null);
@@ -385,24 +409,27 @@ export default function MapViewSimple(): React.ReactElement {
               );
             })}
 
-            {/* Separator */}
-            <div className="hidden h-5 w-px bg-[var(--color-border-tertiary)] sm:block" />
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Rep</span>
-              <select
-                value={filterUser}
-                onChange={(e) => setFilterUser(e.target.value)}
-                className="rounded-lg border border-[var(--color-border-tertiary)] bg-background px-3 py-1.5 text-sm focus:border-[var(--brand-green)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-green)]/30"
-              >
-                <option value="all">All</option>
-                {uniqueUsers.map((code) => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Separator and Rep dropdown (hidden for sales reps) */}
+            {userRole !== 'sales' && (
+              <>
+                <div className="hidden h-5 w-px bg-[var(--color-border-tertiary)] sm:block" />
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Rep</span>
+                  <select
+                    value={filterUser}
+                    onChange={(e) => setFilterUser(e.target.value)}
+                    className="rounded-lg border border-[var(--color-border-tertiary)] bg-background px-3 py-1.5 text-sm focus:border-[var(--brand-green)] focus:outline-none focus:ring-1 focus:ring-[var(--brand-green)]/30"
+                  >
+                    <option value="all">All</option>
+                    {uniqueUsers.map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
           </div>
       </div>
 
