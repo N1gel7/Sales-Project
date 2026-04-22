@@ -49,7 +49,11 @@ async function handler(req, res) {
     // ── Uploads ──
     if (type === 'uploads') {
       if (method === 'GET') {
-        const { data: uploads, error: uErr } = await supabase.from('uploads').select('*').order('created_at', { ascending: false });
+        let query = supabase.from('uploads').select('*').order('created_at', { ascending: false });
+        if (req.user?.role === 'sales') {
+          query = query.eq('user_id', req.user.id);
+        }
+        const { data: uploads, error: uErr } = await query;
         if (uErr) throw uErr;
         const { data: users } = await supabase.from('users').select('id, name, code');
         const userMap = {};
@@ -87,6 +91,9 @@ async function handler(req, res) {
         const status = req.query?.status || null;
 
         let reportsQuery = supabase.from('reports').select('*').order('created_at', { ascending: false });
+        if (req.user?.role === 'sales') {
+          reportsQuery = reportsQuery.eq('author_id', req.user.id);
+        }
         if (reportType && reportType !== 'all') reportsQuery = reportsQuery.eq('type', reportType);
         if (status && status !== 'all') reportsQuery = reportsQuery.eq('status', status);
 

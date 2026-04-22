@@ -1,5 +1,5 @@
 import { supabase } from './_lib/db.js';
-import { withRole } from './_lib/authMiddleware.js';
+import { withAuth } from './_lib/authMiddleware.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendUserWelcomeEmail } from './_lib/mailer.js';
@@ -32,8 +32,18 @@ async function handler(req, res) {
     }
   } else if (req.method === 'POST') {
     const { name, email, role } = req.body;
+    
+    // Authorization check: Only admin and manager can create users
+    if (req.user?.role !== 'admin' && req.user?.role !== 'manager') {
+      return res.status(403).json({ error: 'Permission denied: Only administrators and managers can create users' });
+    }
+
     if (!name || !email || !role) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (role === 'admin') {
+      return res.status(403).json({ error: 'Creation of administrative accounts is prohibited' });
     }
     
     try {
@@ -101,4 +111,4 @@ async function handler(req, res) {
   return res.status(405).end();
 }
 
-export default withRole('admin', 'manager')(handler);
+export default withAuth(handler);

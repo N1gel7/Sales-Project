@@ -130,6 +130,10 @@ async function handler(req, res) {
 
       let query = supabase.from('tasks').select('*').order('created_at', { ascending: false });
 
+      if (req.user?.role === 'sales') {
+        query = query.or(`assignee_id.eq.${req.user.id},created_by.eq.${req.user.id}`);
+      }
+
       if (status) query = query.eq('status', status);
       if (priority) query = query.eq('priority', priority);
       if (category) query = query.eq('category', category);

@@ -20,17 +20,31 @@ async function handleHealth(req, res) {
 async function handleStats(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
+  const userRole = req.user?.role;
+  const userId = req.user?.id;
+
+  let uploadsQuery = supabase.from('uploads').select('coords, type, user_id');
+  if (userRole === 'sales') {
+    uploadsQuery = uploadsQuery.eq('user_id', userId);
+  }
+
   const [
     dailySalesResult, monthlySalesResult, completionResult, productResult,
     { data: uploads }, { data: users },
   ] = await Promise.all([
-    getDailySalesSQL(7), getMonthlySalesSQL(12), getTaskCompletionRatesSQL(),
-    getProductPerformanceSQL(10),
-    supabase.from('uploads').select('coords, type, user_id'),
+    getDailySalesSQL(7, userRole === 'sales' ? userId : null), 
+    getMonthlySalesSQL(12, userRole === 'sales' ? userId : null), 
+    getTaskCompletionRatesSQL(userRole === 'sales' ? userId : null),
+    getProductPerformanceSQL(10, userRole === 'sales' ? userId : null),
+    uploadsQuery,
     supabase.from('users').select('id, code'),
   ]);
 
-  const { data: taskStatRows } = await supabase.from('tasks').select('status');
+  let tasksQuery = supabase.from('tasks').select('status');
+  if (userRole === 'sales') {
+    tasksQuery = tasksQuery.or(`assignee_id.eq.${userId},created_by.eq.${userId}`);
+  }
+  const { data: taskStatRows } = await tasksQuery;
   const taskStats = { pending: 0, in_progress: 0, completed: 0, overdue: 0, cancelled: 0 };
   (taskStatRows || []).forEach(t => { if (taskStats[t.status] !== undefined) taskStats[t.status]++; });
 
@@ -99,8 +113,15 @@ async function handleActivity(req, res) {
   const { limit } = req.query || {};
   const queryLimit = Number(limit) || 20;
 
-  const { data: logs, error: logsError } = await supabase
-    .from('activity_logs').select('*').order('created_at', { ascending: false }).limit(queryLimit);
+  const userRole = req.user?.role;
+  const userId = req.user?.id;
+
+  let query = supabase.from('activity_logs').select('*');
+  if (userRole === 'sales') {
+    query = query.eq('actor_id', userId);
+  }
+  
+  const { data: logs, error: logsError } = await query.order('created_at', { ascending: false }).limit(queryLimit);
   if (logsError) throw logsError;
 
   const { data: users, error: usersError } = await supabase.from('users').select('id, name');

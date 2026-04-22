@@ -406,6 +406,10 @@ export default function Dashboard(): React.ReactElement {
                         labels: {
                           formatter: (v: string | number) =>
                             new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', maximumFractionDigits: 0 }).format(Number(v)),
+                          rotate: -45,
+                          rotateAlways: false,
+                          hideOverlappingLabels: true,
+                          trim: true,
                         },
                       },
                       grid: { borderColor: 'var(--color-border-tertiary)', strokeDashArray: 4 },
@@ -569,6 +573,11 @@ export default function Dashboard(): React.ReactElement {
                       ? new Date(year, month - 1, dd).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
                       : '';
                   }),
+                  labels: {
+                    hideOverlappingLabels: true,
+                    rotate: -45,
+                    rotateAlways: false,
+                  },
                 },
                 yaxis: {
                   labels: {
