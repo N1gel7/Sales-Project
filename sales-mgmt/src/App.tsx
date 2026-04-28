@@ -29,6 +29,7 @@ import Categories from './pages/Categories';
 import Chat from './pages/Chat';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
+import ResetPassword from './pages/ResetPassword';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ShellProvider, useShell, type DateRangePreset } from './context/ShellContext';
 import { GlobalSearchTrigger } from './components/GlobalSearch';
@@ -345,12 +346,16 @@ function AppShell(): React.ReactElement {
 
 function App(): React.ReactElement {
   const location = useLocation();
-  const isAuthRoute = location.pathname === '/login';
+  const publicPaths = ['/login', '/reset-password', '/forgot-password'];
+  const isPublicRoute = publicPaths.some((p) => location.pathname.startsWith(p));
 
-  if (isAuthRoute) {
+  if (isPublicRoute) {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Convenience: /forgot-password redirects to the login page which has the forgot-mode UI */}
+        <Route path="/forgot-password" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );

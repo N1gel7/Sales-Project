@@ -76,7 +76,8 @@ async function handler(req, res) {
         throw error;
       }
       
-      const configuredAppUrl = process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
+      const reqOrigin = req.headers.origin || (req.headers.host ? `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}` : null);
+      const configuredAppUrl = process.env.APP_URL || process.env.FRONTEND_URL || reqOrigin || 'http://localhost:5173';
       const loginUrl = `${configuredAppUrl.replace(/\/$/, '')}/login`;
       try {
         await sendUserWelcomeEmail({

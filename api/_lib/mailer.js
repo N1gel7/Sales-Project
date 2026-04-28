@@ -58,7 +58,6 @@ async function sendViaSmtp({ to, subject, html, text, attachments = [] }) {
   const fromEmail = process.env.SMTP_USER;
   const replyTo = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
 
-  await withTimeout(transporter.verify(), timeoutMs, 'SMTP verify');
   await withTimeout(transporter.sendMail({
     from: `"${fromName}" <${fromEmail}>`,
     replyTo,
