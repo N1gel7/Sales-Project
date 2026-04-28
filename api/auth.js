@@ -136,10 +136,17 @@ async function handleForgotPassword(req, res) {
     .eq('email', email);
   if (updateError) throw updateError;
 
-  const appUrl = (process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const reqOrigin = req?.headers?.origin || (req?.headers?.host ? `${req?.headers?.['x-forwarded-proto'] || 'https'}://${req?.headers?.host}` : null);
+  const appUrl = (process.env.APP_URL || process.env.FRONTEND_URL || reqOrigin || 'http://localhost:5173').replace(/\/$/, '');
   const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
 
-  await sendPasswordResetEmail({ to: email, resetLink });
+  try {
+    await sendPasswordResetEmail({ to: email, resetLink });
+  } catch (emailErr) {
+    // Log server-side but don't expose email errors to the client.
+    // The reset token is already saved — the user can still reset via the link if delivered.
+    console.error('[forgot-password] Failed to send reset email to', email, ':', emailErr.message);
+  }
 
   return res.status(200).json({ message: "If that email exists, a reset link has been sent." });
 }
@@ -198,9 +205,9 @@ async function handler(req, res) {
       default:
         return res.status(400).json({ error: 'Unknown auth action. Use ?action=login|me|change-password|forgot-password|reset-password' });
     }
-  } catch (error) {
+    } catch (error) {
     console.error('Auth error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: 'Internal server error', details: error.message, stack: error.stack });
   }
 }
 
