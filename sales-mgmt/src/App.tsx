@@ -28,7 +28,9 @@ import Login from './pages/Login';
 import Categories from './pages/Categories';
 import Chat from './pages/Chat';
 import Reports from './pages/Reports';
-import Users from './pages/Users.tsx';
+import Users from './pages/Users';
+import ResetPassword from './pages/ResetPassword';
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { ShellProvider, useShell, type DateRangePreset } from './context/ShellContext';
 import { GlobalSearchTrigger } from './components/GlobalSearch';
 import { Button } from '@/components/ui/button';
@@ -41,7 +43,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { UserRole } from './constants/roles';
 
@@ -131,7 +132,7 @@ function SidebarNav({
       )}
       <SideLink to="/chat" icon={<MessageCircle size={20} />} label="Chat" onNavigate={onNavigate} />
       <SideLink to="/reports" icon={<ReportIcon size={20} />} label="Reports" onNavigate={onNavigate} />
-      {(role === UserRole.ADMIN || role === UserRole.MANAGER) && (
+      {(role === UserRole.ADMIN || role === UserRole.MANAGER || role === UserRole.SALES) && (
         <SideLink to="/map" icon={<Map size={20} />} label="Map" onNavigate={onNavigate} />
       )}
     </nav>
@@ -253,102 +254,108 @@ function AppShell(): React.ReactElement {
   const user = useUser();
 
   return (
-    <ShellProvider>
-      <div className="min-h-screen bg-[var(--surface-2)] text-foreground">
-        <div className="flex min-h-screen">
-          {/* Desktop sidebar */}
-          <aside className="group/sidebar fixed inset-y-0 left-0 z-40 hidden w-[56px] overflow-hidden border-r border-white/10 bg-[var(--brand-dark)] transition-[width] duration-200 ease-out hover:w-[220px] lg:block">
-            <div className="flex h-full flex-col">
-              <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-3 pt-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--brand-green)]" />
-                <span className="page-title min-w-0 truncate text-lg text-white opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
-                  SalesOps
-                </span>
+    <TooltipProvider>
+      <ShellProvider>
+        <div className="min-h-screen bg-[var(--surface-2)] text-foreground">
+          <div className="flex min-h-screen">
+            {/* Desktop sidebar */}
+            <aside className="group/sidebar fixed inset-y-0 left-0 z-40 hidden w-[56px] overflow-hidden border-r border-white/10 bg-[var(--brand-dark)] transition-[width] duration-200 ease-out hover:w-[220px] lg:block">
+              <div className="flex h-full flex-col">
+                <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/10 px-3 pt-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[var(--brand-green)]" />
+                  <span className="page-title min-w-0 truncate text-lg text-white opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+                    SalesOps
+                  </span>
+                </div>
+                <SidebarNav role={role} />
+                <div className="mt-auto border-t border-white/10 p-3">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-9 w-9 shrink-0 border border-white/20">
+                      <AvatarFallback className="bg-white/10 text-xs text-white">{initials(user?.name)}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
+                      <p className="truncate text-xs font-medium text-white">{user?.name}</p>
+                      <p className="truncate text-[10px] uppercase text-white/50">{user?.role}</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] text-white/30 opacity-0 group-hover/sidebar:opacity-100">v0.1.0</p>
+                </div>
               </div>
-              <SidebarNav role={role} />
-              <div className="mt-auto border-t border-white/10 p-3">
-                <div className="flex items-center gap-2">
-                  <Avatar className="h-9 w-9 shrink-0 border border-white/20">
-                    <AvatarFallback className="bg-white/10 text-xs text-white">{initials(user?.name)}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 opacity-0 transition-opacity duration-200 group-hover/sidebar:opacity-100">
-                    <p className="truncate text-xs font-medium text-white">{user?.name}</p>
-                    <p className="truncate text-[10px] uppercase text-white/50">{user?.role}</p>
+            </aside>
+
+            {/* Mobile sheet */}
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetContent side="left" className="w-[280px] border-[var(--brand-dark)] bg-[var(--brand-dark)] p-0 text-white">
+                <SheetHeader className="border-b border-white/10 p-4 text-left">
+                  <SheetTitle className="page-title text-xl text-white">SalesOps</SheetTitle>
+                </SheetHeader>
+                <SidebarNav role={role} onNavigate={() => setMobileOpen(false)} linkClass="py-1" />
+              </SheetContent>
+            </Sheet>
+
+            <div className="flex min-h-screen flex-1 flex-col lg:pl-[56px]">
+              <header className="sticky top-0 z-30 border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] backdrop-blur-sm">
+                <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 lg:hidden"
+                      onClick={() => setMobileOpen(true)}
+                      aria-label="Open menu"
+                    >
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                    <h1 className="page-title min-w-0 truncate text-[20px] font-normal leading-tight">{title}</h1>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+                    {location.pathname === '/' && <DateRangePills />}
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <GlobalSearchTrigger className="h-9 border-[var(--color-border-tertiary)] bg-background" />
+                      </TooltipTrigger>
+                      <TooltipContent>Search (⌘K)</TooltipContent>
+                    </Tooltip>
+                    <UserMenu />
                   </div>
                 </div>
-                <p className="mt-2 text-[10px] text-white/30 opacity-0 group-hover/sidebar:opacity-100">v0.1.0</p>
-              </div>
+              </header>
+
+              <main className="flex-1 p-4 sm:p-6 lg:p-8">
+                <Routes>
+                  <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
+                  <Route path="/products" element={<RequireAuth roles={[UserRole.ADMIN]}><Products /></RequireAuth>} />
+                  <Route path="/categories" element={<RequireAuth roles={[UserRole.ADMIN]}><Categories /></RequireAuth>} />
+                  <Route path="/tasks" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Tasks /></RequireAuth>} />
+                  <Route path="/uploads" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Uploads /></RequireAuth>} />
+                  <Route path="/billing" element={<RequireAuth roles={[UserRole.MANAGER, UserRole.ADMIN]}><Billing /></RequireAuth>} />
+                  <Route path="/chat" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Chat /></RequireAuth>} />
+                  <Route path="/reports" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Reports /></RequireAuth>} />
+                  <Route path="/users" element={<RequireAuth roles={[UserRole.ADMIN]}><Users /></RequireAuth>} />
+                  <Route path="/map" element={<RequireAuth roles={[UserRole.ADMIN, UserRole.MANAGER, UserRole.SALES]}><MapViewSimple /></RequireAuth>} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </main>
             </div>
-          </aside>
-
-          {/* Mobile sheet */}
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetContent side="left" className="w-[280px] border-[var(--brand-dark)] bg-[var(--brand-dark)] p-0 text-white">
-              <SheetHeader className="border-b border-white/10 p-4 text-left">
-                <SheetTitle className="page-title text-xl text-white">SalesOps</SheetTitle>
-              </SheetHeader>
-              <SidebarNav role={role} onNavigate={() => setMobileOpen(false)} linkClass="py-1" />
-            </SheetContent>
-          </Sheet>
-
-          <div className="flex min-h-screen flex-1 flex-col lg:pl-[56px]">
-            <header className="sticky top-0 z-30 border-b border-[var(--color-border-tertiary)] bg-[var(--surface)] backdrop-blur-sm">
-              <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0 lg:hidden"
-                    onClick={() => setMobileOpen(true)}
-                    aria-label="Open menu"
-                  >
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                  <h1 className="page-title min-w-0 truncate text-[20px] font-normal leading-tight">{title}</h1>
-                </div>
-                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-                  {location.pathname === '/' && <DateRangePills />}
-                  <Tooltip>
-                    <TooltipTrigger className="inline-flex">
-                      <GlobalSearchTrigger className="h-9 border-[var(--color-border-tertiary)] bg-background" />
-                    </TooltipTrigger>
-                    <TooltipContent>Search (⌘K)</TooltipContent>
-                  </Tooltip>
-                  <UserMenu />
-                </div>
-              </div>
-            </header>
-
-            <main className="flex-1 p-4 sm:p-6 lg:p-8">
-              <Routes>
-                <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-                <Route path="/products" element={<RequireAuth roles={[UserRole.ADMIN]}><Products /></RequireAuth>} />
-                <Route path="/categories" element={<RequireAuth roles={[UserRole.ADMIN]}><Categories /></RequireAuth>} />
-                <Route path="/tasks" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Tasks /></RequireAuth>} />
-                <Route path="/uploads" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Uploads /></RequireAuth>} />
-                <Route path="/billing" element={<RequireAuth roles={[UserRole.MANAGER, UserRole.ADMIN]}><Billing /></RequireAuth>} />
-                <Route path="/chat" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Chat /></RequireAuth>} />
-                <Route path="/reports" element={<RequireAuth roles={[UserRole.SALES, UserRole.MANAGER, UserRole.ADMIN]}><Reports /></RequireAuth>} />
-                <Route path="/users" element={<RequireAuth roles={[UserRole.ADMIN]}><Users /></RequireAuth>} />
-                <Route path="/map" element={<RequireAuth roles={[UserRole.ADMIN, UserRole.MANAGER]}><MapViewSimple /></RequireAuth>} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </main>
           </div>
         </div>
-      </div>
-    </ShellProvider>
+      </ShellProvider>
+    </TooltipProvider>
   );
 }
 
 function App(): React.ReactElement {
   const location = useLocation();
-  const isAuthRoute = location.pathname === '/login';
+  const publicPaths = ['/login', '/reset-password', '/forgot-password'];
+  const isPublicRoute = publicPaths.some((p) => location.pathname.startsWith(p));
 
-  if (isAuthRoute) {
+  if (isPublicRoute) {
     return (
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        {/* Convenience: /forgot-password redirects to the login page which has the forgot-mode UI */}
+        <Route path="/forgot-password" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );

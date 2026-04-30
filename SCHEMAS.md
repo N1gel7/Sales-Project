@@ -1,6 +1,6 @@
 # PostgreSQL Schemas (Supabase)
 
-This project uses Supabase/PostgreSQL as the source of truth. Legacy MongoDB/Mongoose models have been removed.
+This project uses Supabase/PostgreSQL as the source of truth.
 
 ## Users
 

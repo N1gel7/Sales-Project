@@ -37,7 +37,11 @@ async function handler(req, res) {
 
   try {
     if (method === 'GET') {
-      const { data: uploads, error: uErr } = await supabase.from('uploads').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('uploads').select('*').order('created_at', { ascending: false });
+      if (req.user?.role === 'sales') {
+        query = query.eq('user_id', req.user.id);
+      }
+      const { data: uploads, error: uErr } = await query;
       if (uErr) throw uErr;
 
       const { data: users, error: usErr } = await supabase.from('users').select('id, name, code');

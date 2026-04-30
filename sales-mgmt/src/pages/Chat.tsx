@@ -190,10 +190,16 @@ export default function ChatPage() {
   async function loadUsers() {
     try {
       const response = await fetch('/api/users', { headers: getAuthHeaders() });
+      if (!response.ok) {
+        console.warn('Failed to load users for chat selection:', response.status);
+        setUsers([]);
+        return;
+      }
       const data = await response.json();
-      setUsers(data);
+      setUsers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load users:', error);
+      setUsers([]);
     }
   }
 
@@ -427,7 +433,7 @@ export default function ChatPage() {
                   >
                     <h2 className="text-base font-semibold text-foreground">{selectedChat.name}</h2>
                     <p className="text-xs text-muted-foreground">
-                      {selectedChat.participants.length} member{selectedChat.participants.length !== 1 ? 's' : ''} · online
+                      {selectedChat.participants.length} member{selectedChat.participants.length !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
@@ -583,7 +589,7 @@ export default function ChatPage() {
                   Add Members
                 </label>
                 <div className="max-h-40 overflow-y-auto border border-gray-300 rounded-md">
-                  {users.map((user) => (
+                  {(users || []).map((user) => (
                     <label key={user._id} className="flex items-center p-2 hover:bg-gray-50">
                       <input
                         type="checkbox"

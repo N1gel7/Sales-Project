@@ -14,24 +14,8 @@ import { supabase } from './db.js';
  * @param {number} days - Number of days back to query (default 7)
  * @returns {Array} [{ date, revenue, count, top_rep }]
  */
-export async function getDailySalesSQL(days = 7) {
-  const { data, error } = await supabase.rpc('get_daily_sales', { days_back: days });
-
-  if (error) {
-    // Fallback: JS aggregation if the RPC function is not yet deployed
-    console.warn('[analytics] RPC get_daily_sales not available, falling back to JS aggregation:', error.message);
-    return _dailySalesFallback(days);
-  }
-
-  return (data || []).map(row => ({
-    date: row.sale_date,
-    year: new Date(row.sale_date).getFullYear(),
-    month: new Date(row.sale_date).getMonth() + 1,
-    day: new Date(row.sale_date).getDate(),
-    revenue: Number(row.revenue),
-    count: Number(row.invoice_count),
-    topRep: row.top_rep || null,
-  }));
+export async function getDailySalesSQL(days = 7, userId = null) {
+  return _dailySalesFallback(days, userId);
 }
 
 /**
@@ -41,21 +25,8 @@ export async function getDailySalesSQL(days = 7) {
  * @param {number} months - Number of months back (default 12)
  * @returns {Array} [{ year, month, revenue, count, top_rep }]
  */
-export async function getMonthlySalesSQL(months = 12) {
-  const { data, error } = await supabase.rpc('get_monthly_sales', { months_back: months });
-
-  if (error) {
-    console.warn('[analytics] RPC get_monthly_sales not available, falling back to JS aggregation:', error.message);
-    return _monthlySalesFallback(months);
-  }
-
-  return (data || []).map(row => ({
-    year: Number(row.sale_year),
-    month: Number(row.sale_month),
-    revenue: Number(row.revenue),
-    count: Number(row.invoice_count),
-    topRep: row.top_rep || null,
-  }));
+export async function getMonthlySalesSQL(months = 12, userId = null) {
+  return _monthlySalesFallback(months, userId);
 }
 
 /**
@@ -64,34 +35,8 @@ export async function getMonthlySalesSQL(months = 12) {
  *
  * @returns {{ overall: Object, byUser: Array }}
  */
-export async function getTaskCompletionRatesSQL() {
-  const { data, error } = await supabase.rpc('get_task_completion_rates');
-
-  if (error) {
-    console.warn('[analytics] RPC get_task_completion_rates not available, falling back to JS aggregation:', error.message);
-    return _taskCompletionFallback();
-  }
-
-  const overall = data.find(r => r.user_id === null) || null;
-  const byUser = data.filter(r => r.user_id !== null);
-
-  return {
-    overall: overall
-      ? {
-          total: Number(overall.total_tasks),
-          completed: Number(overall.completed_tasks),
-          rate: Number(overall.completion_rate),
-        }
-      : { total: 0, completed: 0, rate: 0 },
-    byUser: byUser.map(r => ({
-      userId: r.user_id,
-      userName: r.user_name,
-      userCode: r.user_code,
-      total: Number(r.total_tasks),
-      completed: Number(r.completed_tasks),
-      rate: Number(r.completion_rate),
-    })),
-  };
+export async function getTaskCompletionRatesSQL(userId = null) {
+  return _taskCompletionFallback(userId);
 }
 
 /**
@@ -101,19 +46,8 @@ export async function getTaskCompletionRatesSQL() {
  * @param {number} limit - Max products to return (default 10)
  * @returns {Array} [{ product, revenue, count }]
  */
-export async function getProductPerformanceSQL(limit = 10) {
-  const { data, error } = await supabase.rpc('get_product_performance', { row_limit: limit });
-
-  if (error) {
-    console.warn('[analytics] RPC get_product_performance not available, falling back to JS aggregation:', error.message);
-    return _productPerformanceFallback(limit);
-  }
-
-  return (data || []).map(row => ({
-    _id: row.product_name,
-    revenue: Number(row.revenue),
-    count: Number(row.invoice_count),
-  }));
+export async function getProductPerformanceSQL(limit = 10, userId = null) {
+  return _productPerformanceFallback(limit, userId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -122,15 +56,19 @@ export async function getProductPerformanceSQL(limit = 10) {
 // These replicate the same logic but via JS over full table fetches.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function _dailySalesFallback(days) {
+async function _dailySalesFallback(days, userId) {
   const since = new Date();
   since.setDate(since.getDate() - days);
   since.setHours(0, 0, 0, 0);
 
-  const { data: invoices } = await supabase
+  let query = supabase
     .from('invoices')
     .select('price, created_at, created_by')
     .gte('created_at', since.toISOString());
+
+    if (userId) query = query.eq('created_by', userId);
+
+  const { data: invoices } = await query;
 
   const map = {};
   (invoices || []).forEach(i => {
@@ -156,14 +94,18 @@ async function _dailySalesFallback(days) {
   );
 }
 
-async function _monthlySalesFallback(months) {
+async function _monthlySalesFallback(months, userId) {
   const since = new Date();
   since.setMonth(since.getMonth() - months);
 
-  const { data: invoices } = await supabase
+  let query = supabase
     .from('invoices')
-    .select('price, created_at')
+    .select('price, created_at, created_by')
     .gte('created_at', since.toISOString());
+
+  if (userId) query = query.eq('created_by', userId);
+
+  const { data: invoices } = await query;
 
   const map = {};
   (invoices || []).forEach(i => {
@@ -187,9 +129,12 @@ async function _monthlySalesFallback(months) {
   );
 }
 
-async function _taskCompletionFallback() {
+async function _taskCompletionFallback(userId) {
+  let taskQuery = supabase.from('tasks').select('status, assignee_id, created_by');
+  if (userId) taskQuery = taskQuery.or(`assignee_id.eq.${userId},created_by.eq.${userId}`);
+
   const [{ data: tasks }, { data: users }] = await Promise.all([
-    supabase.from('tasks').select('status, assignee_id'),
+    taskQuery,
     supabase.from('users').select('id, name, code'),
   ]);
 
@@ -233,9 +178,12 @@ async function _taskCompletionFallback() {
   };
 }
 
-async function _productPerformanceFallback(limit) {
+async function _productPerformanceFallback(limit, userId) {
+  let invoiceQuery = supabase.from('invoices').select('price, product, created_by');
+  if (userId) invoiceQuery = invoiceQuery.eq('created_by', userId);
+
   const [{ data: invoices }, { data: products }] = await Promise.all([
-    supabase.from('invoices').select('price, product'),
+    invoiceQuery,
     supabase.from('products').select('name, category')
   ]);
 
