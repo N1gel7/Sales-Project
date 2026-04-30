@@ -66,7 +66,6 @@ for (const file of files) {
       hits.push({ file: path.relative(root, file), matches });
     }
   } catch {
-    // Skip binary/unreadable files safely.
   }
 }
 

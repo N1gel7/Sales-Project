@@ -8,8 +8,7 @@ let markers = {
 };
 
 function initMap() {
-    // Initialize map centered on a default location (you can change this)
-    map = L.map('map').setView([39.8283, -98.5795], 4); // Center of USA
+    map = L.map('map').setView([39.8283, -98.5795], 4);
 
     // Add OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -56,7 +55,7 @@ async function loadTasks() {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             const tasks = data.tasks || [];
@@ -71,7 +70,7 @@ async function loadTasks() {
                             iconAnchor: [16, 16]
                         })
                     });
-                    
+
                     marker.bindPopup(`
                         <div class="p-2">
                             <h3 class="font-bold text-blue-600">${task.title}</h3>
@@ -84,7 +83,7 @@ async function loadTasks() {
                             </p>
                         </div>
                     `);
-                    
+
                     marker.addTo(map);
                     markers.tasks.push(marker);
                 }
@@ -103,7 +102,7 @@ async function loadInvoices() {
                 'Authorization': `Bearer ${token}`
             }
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             const invoices = data.invoices || [];
@@ -116,7 +115,7 @@ async function loadInvoices() {
                         lat = invoice.location.lat;
                         lng = invoice.location.lng;
                     }
-                    
+
                     const marker = L.marker([lat, lng], {
                         icon: L.divIcon({
                             className: 'custom-div-icon',
@@ -125,7 +124,7 @@ async function loadInvoices() {
                             iconAnchor: [16, 16]
                         })
                     });
-                    
+
                     marker.bindPopup(`
                         <div class="p-2">
                             <h3 class="font-bold text-green-600">Invoice #${invoice.invoiceNumber}</h3>
@@ -137,7 +136,7 @@ async function loadInvoices() {
                             </p>
                         </div>
                     `);
-                    
+
                     marker.addTo(map);
                     markers.invoices.push(marker);
                 }
@@ -149,7 +148,6 @@ async function loadInvoices() {
 }
 
 async function loadProducts() {
-    // For demo purposes, add some product locations
     const productLocations = [
         { name: 'Product A', location: [40.7128, -74.0060], description: 'New York Office' },
         { name: 'Product B', location: [34.0522, -118.2437], description: 'Los Angeles Branch' },
@@ -166,21 +164,20 @@ async function loadProducts() {
                 iconAnchor: [16, 16]
             })
         });
-        
+
         marker.bindPopup(`
             <div class="p-2">
                 <h3 class="font-bold text-purple-600">${product.name}</h3>
                 <p class="text-sm text-gray-600">${product.description}</p>
             </div>
         `);
-        
+
         marker.addTo(map);
         markers.products.push(marker);
     });
 }
 
 async function loadUsers() {
-    // For demo purposes, add some user locations
     const userLocations = [
         { name: 'John Doe', role: 'Sales Rep', location: [40.7589, -73.9851], description: 'Times Square Area' },
         { name: 'Jane Smith', role: 'Manager', location: [37.7749, -122.4194], description: 'San Francisco Office' },
@@ -197,7 +194,7 @@ async function loadUsers() {
                 iconAnchor: [16, 16]
             })
         });
-        
+
         marker.bindPopup(`
             <div class="p-2">
                 <h3 class="font-bold text-orange-600">${user.name}</h3>
@@ -205,14 +202,14 @@ async function loadUsers() {
                 <p class="text-xs text-gray-500 mt-1">${user.description}</p>
             </div>
         `);
-        
+
         marker.addTo(map);
         markers.users.push(marker);
     });
 }
 
-// Event listeners for controls
-document.addEventListener('DOMContentLoaded', function() {
+
+document.addEventListener('DOMContentLoaded', function () {
     // Refresh button
     const refreshBtn = document.getElementById('refreshMap');
     if (refreshBtn) {
@@ -237,8 +234,6 @@ document.addEventListener('DOMContentLoaded', function() {
             checkbox.addEventListener('change', loadMapData);
         }
     });
-
-    // Initialize map when page loads
     initMap();
 });
 

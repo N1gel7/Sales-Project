@@ -268,7 +268,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "vitest": "^4.1.5"
   },
   "type": "module",
   "scripts": {
@@ -280,7 +281,8 @@
     "db:init": "node scripts/init-db.js",
     "db:analytics": "node scripts/setup-analytics-rpc.js",
     "db:add-password-flag": "node scripts/add-initial-password-flag.js",
-    "db:migrate": "npm run db:init && npm run db:analytics"
+    "db:migrate": "npm run db:init && npm run db:analytics",
+    "test": "vitest run"
   },
   "repository": {
     "type": "git",

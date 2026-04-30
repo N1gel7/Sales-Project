@@ -41,6 +41,24 @@ async function getInvoiceById(id) {
   return data;
 }
 
+/**
+ * Handles Invoice Management API endpoints.
+ * Allows creation, updating, pdf generation, and emailing of invoices.
+ * 
+ * Route: `/api/invoices` or `/api/invoices/:id/[action]`
+ * 
+ * @param {import('http').IncomingMessage} req - The HTTP request object.
+ * @param {import('http').ServerResponse} res - The HTTP response object.
+ * 
+ * @example
+ * // GET /api/invoices
+ * // Returns a list of all invoices.
+ * 
+ * @example
+ * // POST /api/invoices
+ * // Creates a new invoice.
+ * // Requires: `req.body.client`, and either `req.body.product` or `req.body.items`.
+ */
 async function handler(req, res) {
   const { method } = req;
   const { invoiceId, action } = getInvoiceRouteParts(req);

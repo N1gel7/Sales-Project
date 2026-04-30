@@ -4,6 +4,24 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { sendUserWelcomeEmail } from './_lib/mailer.js';
 
+/**
+ * Handles User Management API endpoints.
+ * 
+ * Route: `/api/users`
+ * 
+ * @param {import('http').IncomingMessage} req - The HTTP request object.
+ * @param {import('http').ServerResponse} res - The HTTP response object.
+ * 
+ * @example
+ * // GET /api/users
+ * // Fetches all active users. Returns array of user objects.
+ * 
+ * @example
+ * // POST /api/users
+ * // Creates a new user account.
+ * // Requires: `req.body.name`, `req.body.email`, `req.body.role`
+ * // Authorization: Must be 'admin' or 'manager'. Cannot create 'admin' roles.
+ */
 async function handler(req, res) {
   if (req.method === 'GET') {
     try {

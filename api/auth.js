@@ -17,7 +17,13 @@ function requiresInitialPasswordChange(user) {
   return user?.reset_password_expires === 0 || user?.reset_password_expires === '0';
 }
 
-// ── Login ──
+/**
+ * Handles user authentication via email and password.
+ * Checks against the database and returns a JWT on success.
+ * 
+ * @param {import('http').IncomingMessage} req 
+ * @param {import('http').ServerResponse} res 
+ */
 async function handleLogin(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -191,7 +197,15 @@ async function handleResetPassword(req, res) {
   return res.status(200).json({ message: "Password updated successfully" });
 }
 
-// ── Router ──
+/**
+ * Main router for the authentication API.
+ * Uses query parameter `?action=...` to route to specific handlers.
+ * 
+ * Route: `/api/auth`
+ * 
+ * @param {import('http').IncomingMessage} req
+ * @param {import('http').ServerResponse} res
+ */
 async function handler(req, res) {
   const action = req.query?.action || '';
 

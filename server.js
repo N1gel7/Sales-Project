@@ -23,12 +23,12 @@ const apiDir = path.join(__dirname, 'api');
 // Recursively load all your Serverless Handler files
 async function loadRoutes(dir, basePath = '/api') {
   if (!fs.existsSync(dir)) return;
-  
+
   const files = fs.readdirSync(dir);
   for (const file of files) {
     const fullPath = path.join(dir, file);
     const stat = fs.statSync(fullPath);
-    
+
     // Ignore internal helper folders (like `_lib`)
     if (stat.isDirectory()) {
       if (!file.startsWith('_')) {
@@ -37,12 +37,12 @@ async function loadRoutes(dir, basePath = '/api') {
     } else if (file.endsWith('.js') && !file.startsWith('_')) {
       const routeName = file.replace('.js', '');
       const routePath = `${basePath}/${routeName === 'index' ? '' : routeName}`;
-      
+
       try {
         const moduleUrl = `file://${fullPath.replace(/\\/g, '/')}`;
         const module = await import(moduleUrl);
         const serverlessHandler = module.default;
-        
+
         if (serverlessHandler) {
           const run = async (req, res) => {
             try {
@@ -81,7 +81,7 @@ async function loadRoutes(dir, basePath = '/api') {
           console.log(`✅ Emulated Serverless Route: ${routePath}`);
         }
       } catch (err) {
-         console.error(`❌ Failed to mount route ${routePath}:`, err.message);
+        console.error(`❌ Failed to mount route ${routePath}:`, err.message);
       }
     }
   }

@@ -12,6 +12,11 @@ export type InvoiceEmailResponse = {
   message?: string;
 };
 
+/**
+ * Core API service wrapper for the frontend.
+ * Provides typed methods for interacting with all backend `/api/*` endpoints.
+ * Automatically handles auth tokens (via http.ts interceptors).
+ */
 export const api = {
   // auth (consolidated into /api/auth?action=...)
   async login(email: string, password: string) {

@@ -16,7 +16,14 @@ async function handleHealth(req, res) {
   });
 }
 
-// ── Dashboard Stats ──
+/**
+ * Aggregates all high-level dashboard statistics (Sales, Tasks, Activity, Products).
+ * Falls back to javascript mapping if SQL aggregations are unavailable.
+ * Filtered by user context (e.g., Sales role only sees their own data).
+ * 
+ * @param {import('http').IncomingMessage} req 
+ * @param {import('http').ServerResponse} res 
+ */
 async function handleStats(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -265,7 +272,15 @@ async function handleNotifications(req, res) {
   return res.status(405).end();
 }
 
-// ── Router ──
+/**
+ * Main router for the Dashboard API.
+ * Uses query parameter `?view=...` to route to specific dashboard components.
+ * 
+ * Route: `/api/dashboard`
+ * 
+ * @param {import('http').IncomingMessage} req
+ * @param {import('http').ServerResponse} res
+ */
 async function handler(req, res) {
   const view = req.query?.view || '';
 

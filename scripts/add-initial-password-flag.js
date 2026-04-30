@@ -18,8 +18,6 @@ async function run() {
       ADD COLUMN IF NOT EXISTS has_changed_initial_password BOOLEAN NOT NULL DEFAULT FALSE
     `);
 
-    // Backfill existing rows using the old sentinel behavior:
-    // reset_password_expires = 0 means "still using initial password".
     await pool.query(`
       UPDATE users
       SET has_changed_initial_password = CASE

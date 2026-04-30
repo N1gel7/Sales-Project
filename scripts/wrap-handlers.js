@@ -3,7 +3,7 @@ import path from 'path';
 
 const apiDir = path.resolve('api');
 const ignoredFiles = ['login.js', 'auth.js', 'health.js'];
-const ignoredDirs = ['_lib', 'auth']; // auth contains the new login and me
+const ignoredDirs = ['_lib', 'auth'];
 
 function applyWrapper(dirPath, relativeLevel = 0) {
   const items = fs.readdirSync(dirPath);
@@ -26,7 +26,7 @@ function applyWrapper(dirPath, relativeLevel = 0) {
       }
 
       const importPath = relativeLevel === 0 ? './_lib/authMiddleware.js' : '../'.repeat(relativeLevel) + '_lib/authMiddleware.js';
-      
+
       const newImport = `import { withAuth } from '${importPath}';\n\n`;
       content = newImport + content;
       content = content.replace('export default async function handler', 'async function handler');

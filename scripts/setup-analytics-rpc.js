@@ -1,15 +1,4 @@
-/**
- * scripts/setup-analytics-rpc.js
- *
- * Deploys the PostgreSQL functions (RPCs) used by the SQL analytics layer.
- * Run this ONCE after init-db.js to register the functions in your Supabase/PG instance.
- *
- * Usage:
- *   node scripts/setup-analytics-rpc.js
- *
- * These functions are called via supabase.rpc() in api/_lib/analytics.js.
- * If not deployed, the analytics module falls back to JS aggregation automatically.
- */
+
 
 import 'dotenv/config';
 import pg from 'pg';
@@ -27,7 +16,6 @@ async function setupAnalyticsRPC() {
   console.log('🔧 Registering SQL Analytics RPC functions...\n');
 
   try {
-    // ── 1. activity_logs: performance indexes ─────────────────────────────────
     console.log('📌 Creating activity_logs indexes...');
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_id
@@ -45,7 +33,6 @@ async function setupAnalyticsRPC() {
       CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at
         ON activity_logs (created_at DESC);
     `);
-    // Composite: actor + time — speeds up "recent actions by user" queries
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_time
         ON activity_logs (actor_id, created_at DESC);

@@ -80,6 +80,23 @@ async function loadUserMap() {
   return userMap;
 }
 
+/**
+ * Handles Task Management API endpoints.
+ * Supports task CRUD operations and commenting.
+ * 
+ * Route: `/api/tasks` or `/api/tasks/:id` or `/api/tasks/:id/comments`
+ * 
+ * @param {import('http').IncomingMessage} req - The HTTP request object.
+ * @param {import('http').ServerResponse} res - The HTTP response object.
+ * 
+ * @example
+ * // GET /api/tasks?status=pending
+ * // Returns a list of tasks, filtered by optional query params.
+ * 
+ * @example
+ * // POST /api/tasks
+ * // Creates a new task. Requires: `req.body.title`.
+ */
 async function handler(req, res) {
   const { method } = req;
   const paramId = req.params?.id;
