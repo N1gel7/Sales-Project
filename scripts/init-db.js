@@ -16,9 +16,7 @@ async function initDB() {
   console.log('Connecting to database...');
   
   try {
-    // ─────────────────────────────────────────────
-    // 1. Users (UUID primary key to match Supabase)
-    // ─────────────────────────────────────────────
+    // 1. Users
     console.log('Creating users table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS public.users (
@@ -42,9 +40,7 @@ async function initDB() {
     `);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_changed_initial_password BOOLEAN NOT NULL DEFAULT FALSE`);
 
-    // ─────────────────────────────────────────────
     // 2. Categories
-    // ─────────────────────────────────────────────
     console.log('Creating categories table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS categories (
@@ -56,9 +52,7 @@ async function initDB() {
       )
     `);
 
-    // ─────────────────────────────────────────────
     // 3. Products
-    // ─────────────────────────────────────────────
     console.log('Creating products table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
@@ -74,9 +68,7 @@ async function initDB() {
       )
     `);
 
-    // ─────────────────────────────────────────────
     // 4. Tasks
-    // ─────────────────────────────────────────────
     console.log('Creating tasks table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS tasks (
@@ -97,9 +89,7 @@ async function initDB() {
     `);
     await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS location JSONB`);
 
-    // ─────────────────────────────────────────────
     // 5. Invoices
-    // ─────────────────────────────────────────────
     console.log('Creating invoices table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoices (
@@ -120,9 +110,7 @@ async function initDB() {
     await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_message TEXT`);
     await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMP WITH TIME ZONE`);
 
-    // ─────────────────────────────────────────────
     // 6. Uploads
-    // ─────────────────────────────────────────────
     console.log('Creating uploads table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS uploads (
@@ -140,11 +128,7 @@ async function initDB() {
       )
     `);
 
-    // ─────────────────────────────────────────────
     // 7. Activity Logs
-    // Tracks global system events for auditing and
-    // dashboard activity feeds.
-    // ─────────────────────────────────────────────
     console.log('Creating activity_logs table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS activity_logs (
@@ -167,9 +151,7 @@ async function initDB() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at   ON activity_logs (created_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_time   ON activity_logs (actor_id, created_at DESC)`);
 
-    // ─────────────────────────────────────────────
     // 8. Chats
-    // ─────────────────────────────────────────────
     console.log('Creating chats table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS chats (
@@ -185,9 +167,7 @@ async function initDB() {
       )
     `);
 
-    // ─────────────────────────────────────────────
     // 9. Messages
-    // ─────────────────────────────────────────────
     console.log('Creating messages table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS messages (
@@ -201,9 +181,7 @@ async function initDB() {
       )
     `);
 
-    // ─────────────────────────────────────────────
     // 10. Reports
-    // ─────────────────────────────────────────────
     console.log('Creating reports table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS reports (
@@ -223,9 +201,7 @@ async function initDB() {
       )
     `);
 
-    // ─────────────────────────────────────────────
     // 11. Notifications
-    // ─────────────────────────────────────────────
     console.log('Creating notifications table...');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
@@ -241,11 +217,7 @@ async function initDB() {
       )
     `);
 
-    // ─────────────────────────────────────────────
     // Performance Indexes (Analytics)
-    // Speeds up SQL GROUP BY aggregations used by
-    // the /api/analytics/* endpoints.
-    // ─────────────────────────────────────────────
     console.log('Creating analytics performance indexes...');
     // invoices: date-range grouping and rep attribution
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created_at  ON invoices (created_at DESC)`);
@@ -262,9 +234,7 @@ async function initDB() {
     console.log('   Without it, the endpoints fall back to JavaScript aggregation automatically.\n');
 
 
-    // ─────────────────────────────────────────────
     // Seed Initial Categories
-    // ─────────────────────────────────────────────
     const catExists = await pool.query('SELECT 1 FROM categories LIMIT 1');
     if (catExists.rows.length === 0) {
       console.log('Seeding initial categories...');

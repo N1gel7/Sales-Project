@@ -27,7 +27,7 @@ async function setupAnalyticsRPC() {
   console.log('🔧 Registering SQL Analytics RPC functions...\n');
 
   try {
-    // ── 1. activity_logs: performance indexes ─────────────────────────────────
+    // 1. activity_logs: performance indexes
     console.log('📌 Creating activity_logs indexes...');
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_activity_logs_actor_id
@@ -52,7 +52,7 @@ async function setupAnalyticsRPC() {
     `);
     console.log('  ✅ activity_logs indexes created.\n');
 
-    // ── 2. invoices: date index for GROUP BY aggregations ────────────────────
+    // 2. invoices: date index for GROUP BY aggregations
     console.log('📌 Creating invoices performance indexes...');
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_invoices_created_at
@@ -64,7 +64,7 @@ async function setupAnalyticsRPC() {
     `);
     console.log('  ✅ invoices indexes created.\n');
 
-    // ── 3. tasks: status + assignee indexes ──────────────────────────────────
+    // 3. tasks: status + assignee indexes
     console.log('📌 Creating tasks performance indexes...');
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_tasks_status
@@ -80,11 +80,7 @@ async function setupAnalyticsRPC() {
     `);
     console.log('  ✅ tasks indexes created.\n');
 
-    // ────────────────────────────────────────────────────────────────────────
-    // RPC FUNCTION 1: get_daily_sales(days_back INT)
-    // Returns daily revenue aggregated via GROUP BY date(created_at)
-    // JOINs invoices with users to find top rep (most invoices) per day.
-    // ────────────────────────────────────────────────────────────────────────
+    // RPC FUNCTION 1: get_daily_sales
     console.log('📌 Creating RPC: get_daily_sales...');
     await pool.query(`
       CREATE OR REPLACE FUNCTION get_daily_sales(days_back INT DEFAULT 7)
@@ -136,11 +132,7 @@ async function setupAnalyticsRPC() {
     `);
     console.log('  ✅ get_daily_sales created.\n');
 
-    // ────────────────────────────────────────────────────────────────────────
-    // RPC FUNCTION 2: get_monthly_sales(months_back INT)
-    // Returns monthly revenue aggregated via GROUP BY year + month
-    // JOINs invoices with users to find top rep per month.
-    // ────────────────────────────────────────────────────────────────────────
+    // RPC FUNCTION 2: get_monthly_sales
     console.log('📌 Creating RPC: get_monthly_sales...');
     await pool.query(`
       CREATE OR REPLACE FUNCTION get_monthly_sales(months_back INT DEFAULT 12)
@@ -201,11 +193,7 @@ async function setupAnalyticsRPC() {
     `);
     console.log('  ✅ get_monthly_sales created.\n');
 
-    // ────────────────────────────────────────────────────────────────────────
-    // RPC FUNCTION 3: get_task_completion_rates()
-    // Returns task completion rates per user (JOIN tasks ↔ users) + overall row.
-    // Overall row has user_id = NULL.
-    // ────────────────────────────────────────────────────────────────────────
+    // RPC FUNCTION 3: get_task_completion_rates
     console.log('📌 Creating RPC: get_task_completion_rates...');
     await pool.query(`
       CREATE OR REPLACE FUNCTION get_task_completion_rates()
@@ -260,10 +248,7 @@ async function setupAnalyticsRPC() {
     `);
     console.log('  ✅ get_task_completion_rates created.\n');
 
-    // ────────────────────────────────────────────────────────────────────────
-    // RPC FUNCTION 4: get_product_performance(row_limit INT)
-    // Aggregates revenue and count per product name via GROUP BY.
-    // ────────────────────────────────────────────────────────────────────────
+    // RPC FUNCTION 4: get_product_performance
     console.log('📌 Creating RPC: get_product_performance...');
     await pool.query(`
       CREATE OR REPLACE FUNCTION get_product_performance(row_limit INT DEFAULT 10)

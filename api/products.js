@@ -5,7 +5,7 @@ async function handler(req, res) {
   const { method } = req;
 
   try {
-    // ── GET: List products (with optional search/category filter) ──
+    // List products
     if (method === 'GET') {
       const { q, category } = req.query || {};
       
@@ -25,7 +25,7 @@ async function handler(req, res) {
       return res.status(200).json(formatted);
     }
 
-    // ── POST: Create product ──
+    // Create product
     if (method === 'POST') {
       let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { name, price, category, details, attributes } = body || {};
@@ -44,7 +44,7 @@ async function handler(req, res) {
       return res.status(201).json(formatted);
     }
 
-    // ── PATCH/PUT: Update product ──
+    // Update product
     if (method === 'PATCH' || method === 'PUT') {
       let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { _id, id, name, price, category, details, attributes } = body || {};
@@ -69,7 +69,7 @@ async function handler(req, res) {
       return res.status(200).json(formatted);
     }
 
-    // ── DELETE ──
+    // Delete product
     if (method === 'DELETE') {
       let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const prodId = body?._id || body?.id || req.query?.id;

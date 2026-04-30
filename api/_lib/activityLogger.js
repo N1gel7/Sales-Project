@@ -1,9 +1,6 @@
 import { supabase } from './db.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // Activity Event Type Constants
-// Use these in any handler that calls logActivity() for consistency.
-// ─────────────────────────────────────────────────────────────────────────────
 export const ActivityTypes = {
   // Tasks
   TASK_CREATED:   'task_created',
@@ -44,18 +41,7 @@ export const ActivityTypes = {
   SYSTEM_EVENT: 'system_event',
 };
 
-/**
- * Logs a single activity event to the activity_logs table.
- * Never throws — logging failures are swallowed to protect the main request.
- *
- * @param {Object} opts
- * @param {string}  opts.type     - Event type (use ActivityTypes constant)
- * @param {string}  [opts.action] - Human-readable description
- * @param {string}  [opts.actorId]  - UUID of the user who triggered the event
- * @param {string}  [opts.refId]    - UUID of the related entity (task, invoice…)
- * @param {string}  [opts.refType]  - Entity type name ('task', 'invoice', etc.)
- * @param {Object}  [opts.meta]     - Freeform metadata object
- */
+// Logs a single activity event to the activity_logs table.
 export async function logActivity({ type, action, actorId, refId, refType, meta } = {}) {
   try {
     if (!type) {
@@ -79,12 +65,7 @@ export async function logActivity({ type, action, actorId, refId, refType, meta 
   }
 }
 
-/**
- * Batch-logs multiple events in a single insert.
- * Useful when one action triggers several log entries.
- *
- * @param {Array<Object>} events - Array of logActivity-compatible objects
- */
+// Batch-logs multiple events in a single insert.
 export async function logActivities(events = []) {
   if (!events.length) return;
 

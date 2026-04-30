@@ -65,7 +65,7 @@ interface Typer {
   name: string;
 }
 
-// ─── Polling intervals ────────────────────────────────────────
+// Polling intervals
 const MESSAGE_POLL_MS = 3000;
 const CHAT_LIST_POLL_MS = 10000;
 const TYPING_POLL_MS = 2000;
@@ -97,14 +97,14 @@ export default function ChatPage() {
   const isAtBottomRef = useRef(true);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // ── Track whether user is scrolled to bottom ─────────────────
+  // Track whether user is scrolled to bottom
   const handleScroll = useCallback(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
     isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
   }, []);
 
-  // ── Current user from localStorage ───────────────────────────
+  // Current user from localStorage
   useEffect(() => {
     const userInfo = localStorage.getItem('user_info');
     if (userInfo) {
@@ -119,14 +119,14 @@ export default function ChatPage() {
     loadUsers();
   }, []);
 
-  // ── Scroll to bottom on new messages (only if user was at bottom) ──
+  // Scroll to bottom on new messages (only if user was at bottom)
   useEffect(() => {
     if (isAtBottomRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
 
-  // ── Load on chat selection ───────────────────────────────────
+  // Load on chat selection
   useEffect(() => {
     if (selectedChat) {
       loadMessages(selectedChat._id);
@@ -135,7 +135,7 @@ export default function ChatPage() {
     setTypers([]);
   }, [selectedChat]);
 
-  // ── POLLING: Chat list (every 10s) ───────────────────────────
+  // POLLING: Chat list (every 10s)
   useEffect(() => {
     const interval = setInterval(() => {
       loadChats(true);
@@ -143,7 +143,7 @@ export default function ChatPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // ── POLLING: Messages (every 3s when chat is open) ───────────
+  // POLLING: Messages (every 3s when chat is open)
   useEffect(() => {
     if (!selectedChat) return;
     const chatId = selectedChat._id;
@@ -155,7 +155,7 @@ export default function ChatPage() {
     return () => clearInterval(interval);
   }, [selectedChat]);
 
-  // ── POLLING: Typing indicators (every 2s when chat is open) ──
+  // POLLING: Typing indicators (every 2s when chat is open)
   useEffect(() => {
     if (!selectedChat) return;
     const chatId = selectedChat._id;
@@ -167,14 +167,14 @@ export default function ChatPage() {
     return () => clearInterval(interval);
   }, [selectedChat]);
 
-  // ── Cleanup typing timeout on unmount ────────────────────────
+  // Cleanup typing timeout on unmount
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, []);
 
-  // ── Data fetchers ────────────────────────────────────────────
+  // Data fetchers
   async function loadChats(silent = false) {
     try {
       const response = await fetch('/api/chats', { headers: getAuthHeaders() });
@@ -241,7 +241,7 @@ export default function ChatPage() {
     }
   }
 
-  // ── Typing state management ──────────────────────────────────
+  // Typing state management
   function notifyTyping(isTyping: boolean) {
     if (!selectedChat) return;
     fetch('/api/chats?action=typing', {
@@ -263,7 +263,7 @@ export default function ChatPage() {
     }, TYPING_DEBOUNCE_MS);
   }
 
-  // ── Send message ─────────────────────────────────────────────
+  // Send message
   async function sendMessage() {
     if (!messageText.trim() || !selectedChat || sendingMessage) return;
 
@@ -342,7 +342,7 @@ export default function ChatPage() {
     chat.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // ── Typing indicator text ────────────────────────────────────
+  // Typing indicator text
   function typingText(): string | null {
     if (typers.length === 0) return null;
     if (typers.length === 1) return `${typers[0].name} is typing`;
@@ -350,7 +350,7 @@ export default function ChatPage() {
     return `${typers[0].name} and ${typers.length - 1} others are typing`;
   }
 
-  // ── Render ───────────────────────────────────────────────────
+  // Render
   if (loading) {
     return (
       <div className="flex h-64 items-center justify-center rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)]">

@@ -1,60 +1,28 @@
 import { supabase } from './db.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
 // SQL Aggregation Helpers
-// All functions execute raw SQL via supabase.rpc() against PostgreSQL.
-// Falls back to JS aggregation if RPC functions aren't deployed yet.
-// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Daily sales aggregation for the last N days.
- * SQL: GROUP BY date, summing price and counting invoices.
- * JOINs users to include rep name.
- *
- * @param {number} days - Number of days back to query (default 7)
- * @returns {Array} [{ date, revenue, count, top_rep }]
- */
+// Daily sales aggregation for the last N days.
 export async function getDailySalesSQL(days = 7, userId = null) {
   return _dailySalesFallback(days, userId);
 }
 
-/**
- * Monthly sales aggregation.
- * SQL: GROUP BY year+month with JOIN to users for top performer info.
- *
- * @param {number} months - Number of months back (default 12)
- * @returns {Array} [{ year, month, revenue, count, top_rep }]
- */
+// Monthly sales aggregation.
 export async function getMonthlySalesSQL(months = 12, userId = null) {
   return _monthlySalesFallback(months, userId);
 }
 
-/**
- * Task completion rates — overall + per user.
- * SQL: JOIN tasks with users, GROUP BY assignee to calculate completion %.
- *
- * @returns {{ overall: Object, byUser: Array }}
- */
+// Task completion rates — overall + per user.
 export async function getTaskCompletionRatesSQL(userId = null) {
   return _taskCompletionFallback(userId);
 }
 
-/**
- * Product performance aggregation via SQL JOIN invoices → products.
- * Groups by product name, sums revenue and counts sales.
- *
- * @param {number} limit - Max products to return (default 10)
- * @returns {Array} [{ product, revenue, count }]
- */
+// Product performance aggregation
 export async function getProductPerformanceSQL(limit = 10, userId = null) {
   return _productPerformanceFallback(limit, userId);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // JS Fallback Implementations
-// Used when Supabase RPC functions are not yet deployed.
-// These replicate the same logic but via JS over full table fetches.
-// ─────────────────────────────────────────────────────────────────────────────
 
 async function _dailySalesFallback(days, userId) {
   const since = new Date();

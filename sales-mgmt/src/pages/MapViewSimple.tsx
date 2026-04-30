@@ -134,7 +134,7 @@ export default function MapViewSimple(): React.ReactElement {
     }
   }, []);
 
-  // ── Fetch uploads ────────────────────────────────────────────
+  // Fetch uploads
   const fetchUploads = useCallback(async () => {
     try {
       if (!localStorage.getItem('auth_token')) return;
@@ -145,7 +145,7 @@ export default function MapViewSimple(): React.ReactElement {
     }
   }, []);
 
-  // ── Load Leaflet via CDN ─────────────────────────────────────
+  // Load Leaflet via CDN
   useEffect(() => {
     const loadLeaflet = async () => {
       try {
@@ -184,7 +184,7 @@ export default function MapViewSimple(): React.ReactElement {
     fetchUploads();
   }, [fetchUploads]);
 
-  // ── Initialize map once Leaflet + DOM are ready ──────────────
+  // Initialize map once Leaflet + DOM are ready
   useEffect(() => {
     if (isLoading || !window.L || !mapRef.current || mapInstanceRef.current) return;
 
@@ -197,7 +197,7 @@ export default function MapViewSimple(): React.ReactElement {
     }).addTo(mapInstanceRef.current);
   }, [isLoading]);
 
-  // ── Plot markers when uploads or filters change ──────────────
+  // Plot markers when uploads or filters change
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !window.L) return;
@@ -280,7 +280,7 @@ export default function MapViewSimple(): React.ReactElement {
     });
   }, [uploads, locationLabels]);
 
-  // ── Locate user ──────────────────────────────────────────────
+  // Locate user
   const locateUser = useCallback(() => {
     const map = mapInstanceRef.current;
     if (!navigator.geolocation || !map || !window.L) return;
@@ -329,7 +329,7 @@ export default function MapViewSimple(): React.ReactElement {
     );
   }, []);
 
-  // ── Derived data ─────────────────────────────────────────────
+  // Derived data
   const geoUploads = uploads.filter((u) => u.coords?.lat != null && u.coords?.lng != null);
   const uniqueUsers = Array.from(new Set(geoUploads.map((u) => u.user?.code || 'Unknown')));
 
@@ -341,7 +341,7 @@ export default function MapViewSimple(): React.ReactElement {
     return true;
   }).length;
 
-  // ── Render ───────────────────────────────────────────────────
+  // Render
   if (isLoading) {
     return (
       <div className="flex min-h-[320px] items-center justify-center rounded-xl border border-[var(--color-border-tertiary)] bg-[var(--surface)]">

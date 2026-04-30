@@ -5,7 +5,7 @@ async function handler(req, res) {
   const { method } = req;
 
   try {
-    // ── GET: List all categories ──
+    // List categories
     if (method === 'GET') {
       const { data, error } = await supabase.from('categories').select('*').order('name', { ascending: true });
       if (error) throw error;
@@ -17,7 +17,7 @@ async function handler(req, res) {
       return res.status(200).json(formatted);
     }
 
-    // ── POST: Create a new category ──
+    // Create category
     if (method === 'POST') {
       let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { name, fields } = body || {};
@@ -39,7 +39,7 @@ async function handler(req, res) {
       return res.status(201).json(formatted);
     }
 
-    // ── PATCH/PUT: Update a category ──
+    // Update category
     if (method === 'PATCH' || method === 'PUT') {
       let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { _id, id, name, fields } = body || {};
@@ -59,7 +59,7 @@ async function handler(req, res) {
       return res.status(200).json(formatted);
     }
 
-    // ── DELETE ──
+    // Delete category
     if (method === 'DELETE') {
       let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const catId = body?._id || body?.id || req.query?.id;

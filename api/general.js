@@ -13,17 +13,14 @@ function safeParseJson(value, fallback) {
   return value;
 }
 
-/**
- * General purpose router — the frontend calls this with ?type= to reach
- * different resources. This delegates to Supabase JS queries.
- */
+// General purpose dynamic router.
 async function handler(req, res) {
   const { method } = req;
   const type = req.query?.type || '';
   const chatId = req.query?.chatId;
 
   try {
-    // ── Notifications ──
+    // Notifications
     if (type === 'notifications') {
       if (method === 'GET') {
         const { data, error } = await supabase.from('notifications')
@@ -46,7 +43,7 @@ async function handler(req, res) {
       return res.json([]);
     }
 
-    // ── Uploads ──
+    // Uploads
     if (type === 'uploads') {
       if (method === 'GET') {
         let query = supabase.from('uploads').select('*').order('created_at', { ascending: false });
@@ -84,7 +81,7 @@ async function handler(req, res) {
     }
 
 
-    // ── Reports ──
+    // Reports
     if (type === 'reports') {
       if (method === 'GET') {
         const reportType = req.query?.reportType || req.query?.typeFilter || null;
@@ -137,12 +134,12 @@ async function handler(req, res) {
       return res.json([]);
     }
 
-    // ── Seed (dev only) ──
+    // Seed
     if (type === 'seed') {
       return res.json({ message: 'Use npm run db:init to seed the database' });
     }
 
-    // ── Fallback ──
+    // Fallback
     return res.status(200).json({ status: 'ok', message: 'General handler' });
 
   } catch (error) {

@@ -46,7 +46,7 @@ async function handler(req, res) {
   const { invoiceId, action } = getInvoiceRouteParts(req);
 
   try {
-    // ── GET /api/invoices/:id/pdf ──
+    // Download PDF
     if (method === 'GET' && invoiceId && action === 'pdf') {
       const invoice = await getInvoiceById(invoiceId);
       const pdfBuffer = await generateInvoicePdfBuffer(invoice);
@@ -56,7 +56,7 @@ async function handler(req, res) {
       return res.status(200).send(pdfBuffer);
     }
 
-    // ── GET: List invoices ──
+    // List invoices
     if (method === 'GET' && !invoiceId) {
       const { data, error } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
       if (error) throw error;
@@ -64,7 +64,7 @@ async function handler(req, res) {
       return res.status(200).json(formatted);
     }
 
-    // ── POST /api/invoices/:id/email ──
+    // Email invoice
     if (method === 'POST' && invoiceId && action === 'email') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
       const to = (body.to || '').trim();
@@ -118,7 +118,7 @@ async function handler(req, res) {
       });
     }
 
-    // ── POST /api/invoices/:id/pay ──
+    // Mark paid
     if (method === 'POST' && invoiceId && action === 'pay') {
       const invoice = await getInvoiceById(invoiceId);
 
@@ -143,7 +143,7 @@ async function handler(req, res) {
       return res.status(200).json(normalizeInvoice(updated));
     }
 
-    // ── PATCH /api/invoices/:id ──
+    // Update status
     if (method === 'PATCH' && invoiceId) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
       const { status } = body;
@@ -173,7 +173,7 @@ async function handler(req, res) {
       return res.status(200).json(normalizeInvoice(updated));
     }
 
-    // ── POST: Create invoice ──
+    // Create invoice
     if (method === 'POST' && !invoiceId) {
       let body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { client, product, price, items, status, location, coords } = body || {};

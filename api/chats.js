@@ -26,7 +26,7 @@ async function handler(req, res) {
     const isMessages = url.includes('/messages') || req.query?.chatId;
     const chatId = req.params?.id || req.query?.chatId || url.match(/\/chats\/([^/]+)\/messages/)?.[1];
 
-    // ─── MESSAGES ───
+    // Messages
     if (isMessages && chatId) {
       if (method === 'GET') {
         const { data: chatCheck } = await supabase.from('chats').select('participants').eq('id', chatId).single();
@@ -101,7 +101,7 @@ async function handler(req, res) {
       return res.status(405).end();
     }
 
-    // ─── CHATS ───
+    // Chats
     if (method === 'GET') {
       const { data: chats, error: cErr } = await supabase.from('chats').select('*').order('updated_at', { ascending: false });
       if (cErr) throw cErr;

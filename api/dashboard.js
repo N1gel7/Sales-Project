@@ -7,7 +7,7 @@ import {
   getProductPerformanceSQL,
 } from './_lib/analytics.js';
 
-// ── Health Check (public) ──
+// Health Check (public)
 async function handleHealth(req, res) {
   return res.status(200).json({
     status: 'healthy',
@@ -16,7 +16,7 @@ async function handleHealth(req, res) {
   });
 }
 
-// ── Dashboard Stats ──
+// Dashboard Stats
 async function handleStats(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -106,7 +106,7 @@ async function handleStats(req, res) {
   });
 }
 
-// ── Dashboard Activity Feed ──
+// Dashboard Activity Feed
 async function handleActivity(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
@@ -138,7 +138,7 @@ async function handleActivity(req, res) {
   return res.json(formattedLogs);
 }
 
-// ── Activity Logs (full, paginated) ──
+// Activity Logs (full, paginated)
 async function handleActivityLogs(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -183,7 +183,7 @@ async function handleActivityLogs(req, res) {
   });
 }
 
-// ── Analytics: Sales ──
+// Analytics: Sales
 async function handleAnalyticsSales(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -217,7 +217,7 @@ async function handleAnalyticsSales(req, res) {
   });
 }
 
-// ── Analytics: Tasks ──
+// Analytics: Tasks
 async function handleAnalyticsTasks(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -231,7 +231,7 @@ async function handleAnalyticsTasks(req, res) {
   return res.status(200).json({ overall, byUser, statusBreakdown });
 }
 
-// ── Notifications ──
+// Notifications
 async function handleNotifications(req, res) {
   const { method } = req;
   const userId = req.user?.id;
@@ -265,7 +265,7 @@ async function handleNotifications(req, res) {
   return res.status(405).end();
 }
 
-// ── Router ──
+// Router
 async function handler(req, res) {
   const view = req.query?.view || '';
 
@@ -279,7 +279,7 @@ async function handler(req, res) {
       case 'analytics-tasks': return await handleAnalyticsTasks(req, res);
       case 'notifications':   return await handleNotifications(req, res);
       default:
-        // Legacy: no ?view= param — serve full dashboard stats (backward compat)
+        // Fallback: no view param returns full dashboard stats
         return await handleStats(req, res);
     }
   } catch (error) {

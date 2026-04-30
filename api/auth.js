@@ -8,16 +8,16 @@ import { withAuth } from './_lib/authMiddleware.js';
 import { sendPasswordResetEmail } from './_lib/mailer.js';
 
 function requiresInitialPasswordChange(user) {
-  // Preferred explicit flag.
+  // Use explicit flag if available
   if (typeof user?.has_changed_initial_password === 'boolean') {
     return user.has_changed_initial_password === false;
   }
 
-  // Backward compatibility for older rows that used reset_password_expires = 0 as a sentinel.
+  // Fallback for older rows
   return user?.reset_password_expires === 0 || user?.reset_password_expires === '0';
 }
 
-// ── Login ──
+// Login
 async function handleLogin(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -57,13 +57,13 @@ async function handleLogin(req, res) {
   return res.status(200).json({ message: "Login successful", user: safeUser, token, requiresPasswordChange: false });
 }
 
-// ── Me ──
+// Current user info
 async function handleMe(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
   return res.status(200).json({ user: req.user });
 }
 
-// ── Change Initial Password ──
+// Initial password change
 async function handleChangePassword(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -111,7 +111,7 @@ async function handleChangePassword(req, res) {
   return res.status(200).json({ message: 'Password changed successfully', token, user: safeUser });
 }
 
-// ── Forgot Password ──
+// Password reset request
 async function handleForgotPassword(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -143,15 +143,14 @@ async function handleForgotPassword(req, res) {
   try {
     await sendPasswordResetEmail({ to: email, resetLink });
   } catch (emailErr) {
-    // Log server-side but don't expose email errors to the client.
-    // The reset token is already saved — the user can still reset via the link if delivered.
+    // Ignore email failure, token still saved
     console.error('[forgot-password] Failed to send reset email to', email, ':', emailErr.message);
   }
 
   return res.status(200).json({ message: "If that email exists, a reset link has been sent." });
 }
 
-// ── Reset Password ──
+// Execute password reset
 async function handleResetPassword(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -191,7 +190,7 @@ async function handleResetPassword(req, res) {
   return res.status(200).json({ message: "Password updated successfully" });
 }
 
-// ── Router ──
+// Router
 async function handler(req, res) {
   const action = req.query?.action || '';
 
@@ -211,21 +210,20 @@ async function handler(req, res) {
   }
 }
 
-// Login and forgot/reset don't require auth; me and change-password do.
-// We handle auth selectively: wrap the handler but skip auth for public actions.
+// Wrap specific endpoints with auth middleware
 export default async function(req, res) {
   const action = req.query?.action || '';
   const publicActions = ['login', 'forgot-password', 'reset-password', 'change-password', ''];
 
   if (publicActions.includes(action)) {
-    // For empty action, return a helpful error without requiring auth
+    // Skip auth for empty action to return correct error
     if (!action) {
       return res.status(400).json({ error: 'Missing ?action= parameter. Use login|me|change-password|forgot-password|reset-password' });
     }
     return handler(req, res);
   }
 
-  // Wrap with auth for protected actions
+  // Require auth for protected actions
   return withAuth(handler)(req, res);
 }
 

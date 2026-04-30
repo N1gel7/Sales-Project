@@ -11,16 +11,16 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Enable CORS for frontend development testing
+// CORS for local dev
 app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
 
-// Simulate the serverless environment parsing
+// Middleware
 app.use(express.json());
 app.use(cookieParser());
 
 const apiDir = path.join(__dirname, 'api');
 
-// Recursively load all your Serverless Handler files
+// Dynamic routing for Vercel emulated serverless API
 async function loadRoutes(dir, basePath = '/api') {
   if (!fs.existsSync(dir)) return;
   
@@ -29,7 +29,7 @@ async function loadRoutes(dir, basePath = '/api') {
     const fullPath = path.join(dir, file);
     const stat = fs.statSync(fullPath);
     
-    // Ignore internal helper folders (like `_lib`)
+    // Skip lib dirs
     if (stat.isDirectory()) {
       if (!file.startsWith('_')) {
         await loadRoutes(fullPath, `${basePath}/${file}`);
@@ -87,7 +87,7 @@ async function loadRoutes(dir, basePath = '/api') {
   }
 }
 
-// Start your Local Developer Server emulator
+// Start emulated server
 loadRoutes(apiDir).then(() => {
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, () => {
